@@ -1,0 +1,8 @@
+/home/liuyichen/Rust_study/Rustb/target/debug/build/target-lexicon-7789ab743261aee4/build_script_build-7789ab743261aee4: /home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/build.rs /home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/src/data_model.rs /home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/src/triple.rs /home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/src/targets.rs
+
+/home/liuyichen/Rust_study/Rustb/target/debug/build/target-lexicon-7789ab743261aee4/build_script_build-7789ab743261aee4.d: /home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/build.rs /home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/src/data_model.rs /home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/src/triple.rs /home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/src/targets.rs
+
+/home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/build.rs:
+/home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/src/data_model.rs:
+/home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/src/triple.rs:
+/home/liuyichen/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-df7c3c540f42cdbd/target-lexicon-0.12.5/src/targets.rs:
