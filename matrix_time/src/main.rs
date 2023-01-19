@@ -2,7 +2,6 @@ use ndarray::Array;
 use ndarray::Array2;
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
-use num::complex::Complex;
 use std::f64::consts::PI;
 use ndarray_linalg::{Eig};
 fn main() {
