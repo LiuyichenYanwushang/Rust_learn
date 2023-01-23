@@ -17,7 +17,7 @@ mod Rustb{
         pub hamR:Option<Array2::<i64>>
     }
     impl Model{
-        pub fn tb_model(dim_r:u64,dim_k:u64,norb:u64,natom:u64,lat:Array2::<f64>,orb:Array2::<f64>,atom:Option<Array2::<f64>>,atom_list:Option<Vec<u64>>,spin:bool)->Model{
+        pub fn tb_model(dim_r:u64,dim_k:u64,norb:u64,lat:Array2::<f64>,orb:Array2::<f64>,natom:Option<u64>,atom:Option<Array2::<f64>>,atom_list:Option<Vec<u64>>,spin:bool)->Model{
             let li=1.0*Complex::i();
             let a:u64=0;
             let c0=0.0+0.0*li;
@@ -26,6 +26,20 @@ mod Rustb{
             }else{
                 let nsta:u64=norb;
             }
+            if natom==None{
+                if atom !=None && atom_list !=None{
+                    let new_natom=atom.len_of(0)
+                    if new_natom != vec.len(){
+                        panic!("Wrong, the length of atom_list is not equal to the natom")
+                }else if atom_list !=None{
+                    panic!("Wrong, the atom is None, but atom_list is not None, please correspondence them")
+                }else{
+                    natom=norb.clone()
+                }
+
+
+            }
+            
             //let ham=Array::zeros((0,nsta,nsta))+Array::zeros((0,nsta,nsta))*li;
             let mut model=Model{
                 dim_r,
@@ -75,11 +89,11 @@ mod tests {
         let dim_r:u64=3;
         let dim_k:u64=2;
         let norb:u64=5;
-        let natom:u64=5;
         let lat=arr2(&[[1.0,0.0,0.0],[3.0_f64.sqrt()/2.0,0.5,0.0],[0.0,0.0,1.0]]);
         let orb=arr2(&[[0.0,0.0,0.0],[0.5,0.0,0.5],[0.5,0.5,0.0],[0.0,0.5,0.5],[0.5,0.5,0.5]]);
-        let model=Model::tb_model(dim_r,dim_k,norb,natom,lat,orb,None,None,false);
+        let model=Model::tb_model(dim_r,dim_k,norb,None,lat,orb,None,None,false);
         println!("{}",model.lat);
+        println!("{}",dim_r)
     }
 }
 
