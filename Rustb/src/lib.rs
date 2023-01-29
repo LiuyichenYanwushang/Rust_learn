@@ -27,35 +27,35 @@ mod Rustb{
                 let nsta:u64=norb;
             }
             let mut new_natom:u64=0;
+            let mut new_atom_list:Vec<u64>=vec![1];
+            let mut new_atom:Array2::<f64>=arr2(&[[0.0]]);
             
             if natom==None{
                 let use_natom=if atom !=None && atom_list !=None{
                     let use_natom:u64=atom.as_ref().unwrap().len_of(ndarray::Axis(0)).try_into().unwrap();
-                    //let atom_list=atom_list.unwrap();
-                    //let atom=atom.unwrap();
                     if use_natom != atom_list.as_ref().unwrap().len().try_into().unwrap(){
                         panic!("Wrong, the length of atom_list is not equal to the natom");
                     }
-                    use_natom
+                    new_natom=use_natom;
                 }else if atom_list !=None || atom != None{
                     panic!("Wrong, the atom and atom_list is not all None, please correspondence them");
                 }else if atom_list==None && atom==None{
-                    let natom:u64=norb.clone();
-                    let atom=orb.clone();
-                    let atom_list=vec![1;natom.try_into().unwrap()];
-                    println!("{:?},1",natom);
-                    natom
+                    new_natom=norb.clone();
+                    new_atom=orb.clone();
+                    new_atom_list=vec![1;new_natom.try_into().unwrap()];
                 } else{
-                    let natom:u64=norb.clone();
+                    new_natom=norb.clone();
                     println!("{:?},2",natom);
-                    natom
                 };
-                new_natom=use_natom;
             }else{
-                let natom=natom.unwrap();
+                new_natom=natom.unwrap();
+                if atom_list==None || atom==None{
+                    panic!("Wrong, the atom and atom_list is None but natom is not none")
+                }else{
+                    new_atom=atom.unwrap();
+                    new_atom_list=atom_list.unwrap();
+                }
             }
-            let atom=atom.unwrap();
-            let atom_list=atom_list.unwrap();
             let mut model=Model{
                 dim_r,
                 dim_k,
@@ -64,8 +64,8 @@ mod Rustb{
                 spin,
                 lat,
                 orb,
-                atom,
-                atom_list,
+                atom:new_atom,
+                atom_list:new_atom_list,
                 ham:arr3(&[[[0.+1.0*li]]]),
                 hamR:arr2(&[[0]]),
             };
