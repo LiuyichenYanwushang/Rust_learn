@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 ndarray="*"
 ndarray-rand="*"
-ndarray-linalg="*"
+ndarray-linalg={version="*",features=["intel-mkl"]}

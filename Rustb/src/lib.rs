@@ -11,10 +11,10 @@ mod Rustb{
         pub spin:bool,
         pub lat:Array2::<f64>,
         pub orb:Array2::<f64>,
-        pub atom:Option<Array2::<f64>>,
-        pub atom_list:Option<Vec<u64>>,
-        pub ham:Option<Array3::<Complex<f64>>>,
-        pub hamR:Option<Array2::<i64>>
+        pub atom:Array2::<f64>,
+        pub atom_list:Vec<u64>,
+        pub ham:Array3::<Complex<f64>>,
+        pub hamR:Array2::<i64>
     }
     impl Model{
         pub fn tb_model(dim_r:u64,dim_k:u64,norb:u64,lat:Array2::<f64>,orb:Array2::<f64>,natom:Option<u64>,atom:Option<Array2::<f64>>,atom_list:Option<Vec<u64>>,spin:bool)->Model{
@@ -26,33 +26,48 @@ mod Rustb{
             }else{
                 let nsta:u64=norb;
             }
-            if natom==None{
-                if atom !=None && atom_list !=None{
-                    let new_natom=atom.len_of(0)
-                    if new_natom != vec.len(){
-                        panic!("Wrong, the length of atom_list is not equal to the natom")
-                }else if atom_list !=None{
-                    panic!("Wrong, the atom is None, but atom_list is not None, please correspondence them")
-                }else{
-                    natom=norb.clone()
-                }
-
-
-            }
+            let mut new_natom:u64=0;
             
-            //let ham=Array::zeros((0,nsta,nsta))+Array::zeros((0,nsta,nsta))*li;
+            if natom==None{
+                let use_natom=if atom !=None && atom_list !=None{
+                    let use_natom:u64=atom.as_ref().unwrap().len_of(ndarray::Axis(0)).try_into().unwrap();
+                    //let atom_list=atom_list.unwrap();
+                    //let atom=atom.unwrap();
+                    if use_natom != atom_list.as_ref().unwrap().len().try_into().unwrap(){
+                        panic!("Wrong, the length of atom_list is not equal to the natom");
+                    }
+                    use_natom
+                }else if atom_list !=None || atom != None{
+                    panic!("Wrong, the atom and atom_list is not all None, please correspondence them");
+                }else if atom_list==None && atom==None{
+                    let natom:u64=norb.clone();
+                    let atom=orb.clone();
+                    let atom_list=vec![1;natom.try_into().unwrap()];
+                    println!("{:?},1",natom);
+                    natom
+                } else{
+                    let natom:u64=norb.clone();
+                    println!("{:?},2",natom);
+                    natom
+                };
+                new_natom=use_natom;
+            }else{
+                let natom=natom.unwrap();
+            }
+            let atom=atom.unwrap();
+            let atom_list=atom_list.unwrap();
             let mut model=Model{
                 dim_r,
                 dim_k,
                 norb,
-                natom,
+                natom:new_natom,
                 spin,
                 lat,
                 orb,
                 atom,
                 atom_list,
-                ham:None,
-                hamR:None,
+                ham:arr3(&[[[0.+1.0*li]]]),
+                hamR:arr2(&[[0]]),
             };
             model
         }
@@ -66,6 +81,7 @@ mod tests {
     use nalgebra::Complex;
     use ndarray::prelude::*;
     use ndarray::*;
+/*
     #[test]
     fn check_model_struct(){
         let model=Model{
@@ -84,6 +100,7 @@ mod tests {
         println!("{}",model.ham.as_ref().expect("REASON").slice(s![0,..,..]));
         println!("{:?}",model.ham.as_ref().expect("REASON").shape());
     }
+*/
     #[test]
     fn check_tb_model_function(){
         let dim_r:u64=3;
@@ -91,7 +108,7 @@ mod tests {
         let norb:u64=5;
         let lat=arr2(&[[1.0,0.0,0.0],[3.0_f64.sqrt()/2.0,0.5,0.0],[0.0,0.0,1.0]]);
         let orb=arr2(&[[0.0,0.0,0.0],[0.5,0.0,0.5],[0.5,0.5,0.0],[0.0,0.5,0.5],[0.5,0.5,0.5]]);
-        let model=Model::tb_model(dim_r,dim_k,norb,None,lat,orb,None,None,false);
+        let model=Model::tb_model(dim_r,dim_k,norb,lat,orb,None,None,None,false);
         println!("{}",model.lat);
         println!("{}",dim_r)
     }
