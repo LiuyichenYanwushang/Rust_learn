@@ -29,7 +29,6 @@ mod Rustb{
             let mut new_natom:u64=0;
             let mut new_atom_list:Vec<u64>=vec![1];
             let mut new_atom:Array2::<f64>=arr2(&[[0.0]]);
-            
             if natom==None{
                 let use_natom=if atom !=None && atom_list !=None{
                     let use_natom:u64=atom.as_ref().unwrap().len_of(ndarray::Axis(0)).try_into().unwrap();
