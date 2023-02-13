@@ -55,6 +55,7 @@ mod Rustb{
                     new_atom_list=atom_list.unwrap();
                 }
             }
+
             let mut model=Model{
                 dim_r,
                 dim_k,
@@ -70,6 +71,8 @@ mod Rustb{
             };
             model
         }
+        pub fn add_hop(&self,tmp:Complex<f64>,ind_i:u64,ind_j:u64,R:Array::<i64>)
+        
     }
 }
 
@@ -109,7 +112,7 @@ mod tests {
         let orb=arr2(&[[0.0,0.0,0.0],[0.5,0.0,0.5],[0.5,0.5,0.0],[0.0,0.5,0.5],[0.5,0.5,0.5]]);
         let model=Model::tb_model(dim_r,dim_k,norb,lat,orb,None,None,None,false);
         println!("{}",model.lat);
-        println!("{}",dim_r)
+        println!("{}",model.dim_r);
     }
 }
 
