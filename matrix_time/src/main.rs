@@ -7,6 +7,6 @@ use ndarray_linalg::{Eig};
 fn main() {
     let a:Array2<f64> = Array::random((2000, 2000), Uniform::new(0., 1.));
     let (eigvals,eigvecs)=a.eig().unwrap();
-    //let c=a.dot(&eigvecs);
-    //println!("{:8.4}", eigvecs);
+    let c=a.dot(&eigvecs);
+    println!("{:8.4}", eigvecs);
 }
