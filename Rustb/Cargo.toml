@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 num="*"
 ndarray="*"
-ndarray-linalg="*"
 nalgebra="*"
 num-complex="*"
+ndarray-linalg={version="*",features=["intel-mkl"]}
