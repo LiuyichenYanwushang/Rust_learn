@@ -4,7 +4,9 @@ use nalgebra::Complex;
 use ndarray_linalg::*;
 use gnuplot::*;
 use std::f64::consts::PI;
+use approx::assert_abs_diff_eq;
 fn main() {
+/*
     let mut a:Array2::<isize> = arr2(&[[1, 2, 3, 4, 5],[6,7,8,9,10]]);
     let mut R:Array1::<isize> = array![5,10];
     a=a.reversed_axes();
@@ -13,7 +15,6 @@ fn main() {
     println!("{}",index_R(&a,&R));
     let i0:Complex<f64>=1.0+1.0*1.0*Complex::i();
     println!("{}",i0.conj());
-/*
     let x = [1, 2, 3, 4, 5];
     let y = [1, 4, 9, 16, 25];
 
@@ -22,7 +23,6 @@ fn main() {
         .lines(&x, &y, &[Caption("y = x^2"), Color("blue")]);
     fg.set_terminal("pdf", "test.pdf");
     fg.show();
-*/
     let a:Array2::<f64>=arr2(&[[1.0,1.0,1.0],[0.0,1.0,0.0],[1.0,0.0,1.0]]);
     println!("{:?}",a.view().mapv(f64::exp));
     println!("{}",i0.exp());
@@ -43,6 +43,17 @@ fn main() {
     println!("{}",(a+a_inv));
     println!("{}",Array2::from_diag(&R));
     println!("{}",PI)
+*/
+    let a: Array2<f64> = array![
+        [2., 1.],
+        [1., 2.],
+    ];
+    //let Ok((eigvals, eigvecs)) = a.eigh(UPLO::Lower);
+    let (eigvals, eigvecs) = if let Ok((eigvals, eigvecs)) = a.eigh(UPLO::Lower) { (eigvals, eigvecs) } else { todo!() };
+    assert_abs_diff_eq!(eigvals, array![1., 3.]);
+    assert_abs_diff_eq!(
+        a.dot(&eigvecs),
+        eigvecs.dot(&Array2::from_diag(&eigvals)),);
 }
 fn find_R(hamR:&Array2::<isize>,R:&Array1::<isize>)->bool{
     let n_R:usize=hamR.len_of(Axis(0));

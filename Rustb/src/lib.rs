@@ -4,6 +4,7 @@ mod Rustb{
     use ndarray::*;
     use ndarray_linalg::*;
     use std::f64::consts::PI;
+    use ndarray_linalg::{Eigh, UPLO};
     pub struct Model{
         pub dim_r:usize,
         pub norb:usize,
@@ -192,19 +193,47 @@ mod Rustb{
                 panic!("Wrong, the k-vector's length must equal to the dimension of model.")
             }
             let nR:usize=self.hamR.len_of(Axis(0));
-            let U0=(self.orb.dot(kvec)*Complex::new(0.0,2.0*PI)).mapv(f64::exp);
+            let U0=self.orb.dot(kvec);
+            let U0=U0.map(|x| Complex::<f64>::new(*x,0.0));
+            let U0=U0*Complex::new(0.0,2.0*PI);
+            let U0=U0.mapv(Complex::exp);
             let U=Array2::from_diag(&U0);
-            let ham0=self.ham.slice(s![0,..,..]).to_owned();
-            let hams=self.ham.slice(s![1..nR,..,..]).to_owned();
-            let Us=(self.hamR.dot(kvec)*Complex::new(0.0,2.0*PI)).mapv(f64::exp);
+            let Us=self.hamR.map(|x| *x as f64).dot(kvec).map(|x| Complex::<f64>::new(*x,0.0));
+            let Us=Us*Complex::new(0.0,2.0*PI);
+            let Us=Us.mapv(Complex::exp);
             let mut hamk=Array2::<Complex<f64>>::zeros((self.nsta,self.nsta));
+            let ham0=self.ham.slice(s![0,..,..]).to_owned();
             for i in 1..nR{
-                hamk+=self.hamR.slice(s![i,..,..]).to_owned()*Us[[i]]
+                hamk=hamk+self.ham.slice(s![i,..,..]).to_owned()*Us[[i]];
             }
-            hamk+=ham0+hamk.t();
+            hamk=ham0+hamk.t()+hamk;
             hamk=hamk.dot(&U);
             let re_ham=U.t().mapv(|x| x.conj());
             re_ham
+        }
+        pub fn solve_onek(&self,kvec:&Array1::<f64>)->(Array1::<f64>,Array2::<Complex<f64>>){
+            if kvec.len() !=self.dim_r{
+                panic!("Wrong, the k-vector's length must equal to the dimension of model.")
+            }           
+            let hamk=self.gen_ham(&kvec);
+            let (eval, evec) = if let Ok((eigvals, eigvecs)) = hamk.eigh(UPLO::Lower) { (eigvals, eigvecs) } else { todo!() };
+            let evec=evec.reversed_axes();
+            (eval,evec)
+        }
+        pub fn solve_all(&self,kvec:&Array2::<f64>)->(Array2::<f64>,Array3::<Complex<f64>>){
+            let nk=kvec.len_of(Axis(0));
+            let mut band=Array2::<f64>::zeros((nk,self.nsta));
+            let mut vectors=Array3::<Complex<f64>>::zeros((nk,self.nsta,self.nsta));
+            for i in 0..nk{
+                let k=kvec.slice(s![i,..]).to_owned();
+                let (eval,evec)=self.solve_onek(&k);
+                band.slice_mut(s![i,..]).assign(&eval);
+                vectors.slice_mut(s![i,..,..]).assign(&evec);
+            }
+            (band,vectors)
+        }
+        pub fn show_band(&self,path:&Array2::<f64>,label:Vec<str>,name:&str){
+            
         }
     }
 }
@@ -233,9 +262,14 @@ mod tests {
         let path=[[0.0,0.0],[1.0/3.0,1.0/3.0],[0.5,0.0],[0.0,0.0]];
         let path=arr2(&path);
         let (k_vec,k_dist,k_node)=model.k_path(&path,nk);
+/*
         println!("{:?}",k_vec);
         println!("{:?}",k_dist);
         println!("{:?}",k_node);
+*/
+       // let kvec=k_vec.slice(s![0,..]).to_owned();
+        let (eval,evec)=model.solve_all(&k_vec);
+        println!("{:?}",eval)
     }
 }
 
