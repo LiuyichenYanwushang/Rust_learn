@@ -19,8 +19,7 @@ fn main() {
     let y = [1, 4, 9, 16, 25];
 
     let mut fg = Figure::new();
-    fg.axes2d()
-        .lines(&x, &y, &[Caption("y = x^2"), Color("blue")]);
+    fg.axes2d().lines(&x, &y, &[Caption("y = x^2"), Color("blue")]);
     fg.set_terminal("pdf", "test.pdf");
     fg.show();
     let a:Array2::<f64>=arr2(&[[1.0,1.0,1.0],[0.0,1.0,0.0],[1.0,0.0,1.0]]);

@@ -1,10 +1,12 @@
 mod Rustb{
+    extern crate plotters;
     use nalgebra::Complex;
     use ndarray::prelude::*;
     use ndarray::*;
     use ndarray_linalg::*;
     use std::f64::consts::PI;
     use ndarray_linalg::{Eigh, UPLO};
+    use gnuplot::
     pub struct Model{
         pub dim_r:usize,
         pub norb:usize,
@@ -232,8 +234,14 @@ mod Rustb{
             }
             (band,vectors)
         }
-        pub fn show_band(&self,path:&Array2::<f64>,label:Vec<str>,name:&str){
-            
+        pub fn show_band(&self,path:&Array2::<f64>,label:Vec<str>,nk:usize){
+            let (k_vec,k_dist,k_node)=self.k_path(&path,nk);
+            let (eval,evec)=self.solve_all(&k_vec);
+            let mut file=File::create("band.dat").expect("Unable to create file");
+
+            file.write(data.as_bytes()).expect("Unable to write data");
+
+
         }
     }
 }

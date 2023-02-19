@@ -11,3 +11,4 @@ ndarray="*"
 nalgebra="*"
 num-complex="*"
 ndarray-linalg={version="*",features=["intel-mkl"]}
+gnuplot="*"
