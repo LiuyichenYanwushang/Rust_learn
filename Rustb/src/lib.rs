@@ -7,6 +7,7 @@ mod Rustb{
     use std::fs::File;
     use std::io::Write;
     use ndarray_linalg::{Eigh, UPLO};
+    use rayon::prelude::*;
     pub struct Model{
         pub dim_r:usize,
         pub norb:usize,
@@ -25,7 +26,6 @@ mod Rustb{
         let n_R:usize=hamR.len_of(Axis(0));
         let dim_R:usize=hamR.len_of(Axis(1));
         for i in 0..(n_R){
-
             let mut a=true;
             for j in 0..(dim_R){
                 a=a&&( hamR[[i,j]]==R[[j]]);
@@ -215,8 +215,8 @@ mod Rustb{
         }
         pub fn solve_onek(&self,kvec:&Array1::<f64>)->(Array1::<f64>,Array2::<Complex<f64>>){
             if kvec.len() !=self.dim_r{
-                panic!("Wrong, the k-vector's length must equal to the dimension of model.")
-            }           
+                panic!("Wrong, the k-vector's length:k_len={} must equal to the dimension of model:{}.",kvec.len(),self.dim_r)
+            } 
             let hamk=self.gen_ham(&kvec);
             let (eval, evec) = if let Ok((eigvals, eigvecs)) = hamk.eigh(UPLO::Lower) { (eigvals, eigvecs) } else { todo!() };
             let evec=evec.reversed_axes();
@@ -237,16 +237,27 @@ mod Rustb{
         pub fn show_band(&self,path:&Array2::<f64>,nk:usize)-> std::io::Result<()>{
             let (k_vec,k_dist,k_node)=self.k_path(&path,nk);
             let (eval,evec)=self.solve_all(&k_vec);
-            let mut file=File::create("band.dat").expect("Unable to create file");
+            let mut file=File::create("BAND.dat").expect("Unable to create file");
             for i in 0..nk{
                 let mut s = String::new();
-                let aa= format!("{:.6}   ", k_dist[[i]]);
+                let aa= format!("{:.6}", k_dist[[i]]);
                 s.push_str(&aa);
                 for j in 0..self.nsta{
+                    if eval[[i,j]]>=0.0 {
+                        s.push_str("     ");
+                    }else{
+                        s.push_str("    ");
+                    }
                     let aa= format!("{:.6}", eval[[i,j]]);
                     s.push_str(&aa);
-                    s.push_str("  ");
                 }
+                writeln!(file,"{}",s)?;
+            }
+            let mut file=File::create("KLABELS").expect("Unable to create file");
+            for i in 0..path.len_of(Axis(0)){
+                let mut s=String::new();
+                let aa= format!("{:.6}", k_node[[i]]);
+                s.push_str(&aa);
                 writeln!(file,"{}",s)?;
             }
             Ok(())
@@ -285,7 +296,8 @@ mod tests {
 */
        // let kvec=k_vec.slice(s![0,..]).to_owned();
         let (eval,evec)=model.solve_all(&k_vec);
-        println!("{:?}",eval)
+        println!("{:?}",eval);
+        model.show_band(&path,nk);
     }
 }
 
