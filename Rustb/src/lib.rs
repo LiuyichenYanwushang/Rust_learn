@@ -8,19 +8,20 @@ mod Rustb{
     use std::io::Write;
     use ndarray_linalg::{Eigh, UPLO};
     use rayon::prelude::*;
+    ///这个Model结构存储了一个TB模型所有的需要的信息
     pub struct Model{
-        pub dim_r:usize,
-        pub norb:usize,
-        pub nsta:usize,
-        pub natom:usize,
-        pub spin:bool,
-        pub lat:Array2::<f64>,
-        pub orb:Array2::<f64>,
-        pub atom:Array2::<f64>,
-        pub atom_list:Vec<usize>,
-        pub ham:Array3::<Complex<f64>>,
-        pub hamR:Array2::<isize>,
-        pub rmatrix:Array3::<Complex<f64>>
+        pub dim_r:usize,                    //模型的维度, 这里我们不区分 dim_k 和 dim_r, 默认是一致的, 请使用者自行设置二维体系.
+        pub norb:usize,                     //模型的轨道数目
+        pub nsta:usize,                     //模型的态的数目, 如果开启自旋, nsta=norb*2
+        pub natom:usize,                    //模型的原子数目, 后面的 atom 和 atom_list 是用来存储原子位置, 以及 每一个原子对应的轨道数目
+        pub spin:bool,                      //模型是否开启自旋, 若开启, spin=true
+        pub lat:Array2::<f64>,              //模型的晶格矢量, 为一个 dim_r*dim_r大小的矩阵, axis0方向存储着1*dim_r的晶格矢量
+        pub orb:Array2::<f64>,              //模型的轨道位置, 我们统一使用分数坐标
+        pub atom:Array2::<f64>,             //模型的原子位置, 也是分数坐标
+        pub atom_list:Vec<usize>,           //模型的原子中的轨道数目, 和原子位置的顺序一致.
+        pub ham:Array3::<Complex<f64>>,     //模型的哈密顿量, <m0|H|nR>, 为一个 n_R*nsta*nsta的三维复数张量, 第一个nsta*nsta的矩阵对应的是原胞内的hopping,即 <m0|H|n0>, 后面对应的是 hamR中的hopping.
+        pub hamR:Array2::<isize>,           //模型的原胞间haopping的距离, 即 <m0|H|nR> 中的 R
+        pub rmatrix:Array3::<Complex<f64>>  //模型的位置矩阵, 即 <m0|r|nR>.
     }
     pub fn find_R(hamR:&Array2::<isize>,R:&Array1::<isize>)->bool{
         let n_R:usize=hamR.len_of(Axis(0));
@@ -52,6 +53,15 @@ mod Rustb{
         0
     }
     impl Model{
+        //!这个函数是用来创建一个 Model, 需要输入的变量意义为
+        //!模型维度 dim_r
+        //!轨道数目 norb
+        //!晶格常数 lat
+        //!轨道 orb
+        //!原子数目 natom, 可以选择 None
+        //!原子位置坐标 atom, 可以选择 None
+        //!每个原子的轨道数目, atom_list
+        //!是否考虑自旋 spin
         pub fn tb_model(dim_r:usize,norb:usize,lat:Array2::<f64>,orb:Array2::<f64>,natom:Option<usize>,atom:Option<Array2::<f64>>,atom_list:Option<Vec<usize>>,spin:bool)->Model{
             let mut nsta:usize=norb;
             if spin{
@@ -132,6 +142,9 @@ mod Rustb{
             let negative_R_exist=find_R(&self.hamR,&negative_R);
             if R_exist {
                 let index=index_R(&self.hamR,&R);
+                if self.ham[[index,ind_i,ind_j]]!=Complex::new(0.0,0.0){
+                    println!("Warning, the data of ham you input is not zero, I hope you know what you are doing. If you want to eliminate this warning, use del_add to remove hopping.")
+                }
                 self.ham[[index,ind_i,ind_j]]=tmp;
                 if index==0{
                     self.ham[[index,ind_j,ind_i]]=tmp.conj();
@@ -141,12 +154,36 @@ mod Rustb{
                 }
             }else if negative_R_exist {
                 let index=index_R(&self.hamR,&negative_R);
+                if self.ham[[index,ind_j,ind_i]]!=Complex::new(0.0,0.0){
+                    println!("Warning, the data of ham you input is not zero, I hope you know what you are doing. If you want to eliminate this warning, use del_add to remove hopping.")
+                }
                 self.ham[[index,ind_j,ind_i]]=tmp.conj();
             }else{
                 let mut new_ham=Array2::<Complex<f64>>::zeros((self.nsta,self.nsta));
                 new_ham[[ind_i,ind_j]]=tmp;
                 self.ham.push(Axis(0),new_ham.view()).unwrap();
                 self.hamR.push(Axis(0),R.view()).unwrap();
+            }
+        }
+        pub fn del_hop(&mut self,ind_i:usize,ind_j:usize,R:Array1::<isize>) {
+            if R.len()!=self.dim_r{
+                panic!("Wrong, the R length should equal to dim_r")
+            }
+            if ind_i>=self.norb ||ind_j>=self.norb{
+                panic!("Wrong, ind_i and ind_j must less than norb, here norb is {}, but ind_i={} and ind_j={}",self.norb,ind_i,ind_j)
+            }
+            let R_exist=find_R(&self.hamR,&R);
+            let negative_R=-R.clone();
+            let negative_R_exist=find_R(&self.hamR,&negative_R);
+            if R_exist {
+                let index=index_R(&self.hamR,&R);
+                self.ham[[index,ind_i,ind_j]]=Complex::new(0.0,0.0);
+                if index==0{
+                    self.ham[[index,ind_j,ind_i]]=Complex::new(0.0,0.0);
+                }
+            }else if negative_R_exist {
+                let index=index_R(&self.hamR,&negative_R);
+                self.ham[[index,ind_j,ind_i]]=Complex::new(0.0,0.0);
             }
         }
         pub fn k_path(&self,path:&Array2::<f64>,nk:usize)->(Array2::<f64>,Array1::<f64>,Array1::<f64>){
@@ -234,6 +271,16 @@ mod Rustb{
             }
             (band,vectors)
         }
+        pub fn solve_all_parallel(&self,kvec:&Array2::<f64>)->(Array2::<f64>,Array3::<Complex<f64>>){
+            let nk=kvec.len_of(Axis(0));
+            let (eval,evec):(Vec<_>,Vec<_>)=kvec.axis_iter(Axis(0)).into_par_iter().map(|x| {
+                let (eval, evec) =self.solve_onek(&x.to_owned()); 
+                (eval.to_vec(),evec.into_raw_vec())
+                }).collect();
+            let band = Array2::from_shape_vec((nk, self.nsta), eval.into_iter().flatten().collect()).unwrap();
+            let vectors=Array3::from_shape_vec((nk, self.nsta,self.nsta), evec.into_iter().flatten().collect()).unwrap();
+            (band,vectors)
+        }
         pub fn show_band(&self,path:&Array2::<f64>,nk:usize)-> std::io::Result<()>{
             let (k_vec,k_dist,k_node)=self.k_path(&path,nk);
             let (eval,evec)=self.solve_all(&k_vec);
@@ -262,8 +309,132 @@ mod Rustb{
             }
             Ok(())
         }
-        
-
+        pub fn from_hr(path:&str,file_name:&str)->Model{
+            use std::io::BufReader;
+            use std::io::BufRead;
+            use std::fs::File;
+            use std::path::Path;
+            let mut file_path = path.to_string();
+            file_path.push_str(file_name);
+            let mut hr_path=file_path.clone();
+            hr_path.push_str("_hr.dat");
+            let path=Path::new(&hr_path);
+            let hr=File::open(path).expect("Unable open the file, please check if have hr file");
+            let reader = BufReader::new(hr);
+            let mut reads:Vec<String>=Vec::new();
+            for line in reader.lines() {
+                let line = line.unwrap();
+                reads.push(line.clone());
+            }
+            let nsta=reads[1].trim().parse::<usize>().unwrap();
+            let n_R=reads[2].trim().parse::<usize>().unwrap();
+            let mut weights:Vec<usize>=Vec::new();
+            let mut n_line:usize=0;
+            for i in 3..reads.len(){
+                let string:Vec<usize>=reads[i].trim().split_whitespace().map(|x| x.parse::<usize>().unwrap()).collect();;
+                weights.extend(string.clone());
+                println!("{}",reads[i]);
+                if string.len() !=15{
+                    n_line=i;
+                    break
+                }
+            }
+            let mut hamR=Array2::<isize>::zeros((1,3));
+            let mut ham=Array3::<Complex<f64>>::zeros((1,nsta,nsta));
+            for i in 0..n_R{
+                let mut string=reads[i*nsta*nsta+n_line].trim().split_whitespace();
+                let a=string.next().unwrap().parse::<isize>().unwrap();
+                let b=string.next().unwrap().parse::<isize>().unwrap();
+                let c=string.next().unwrap().parse::<isize>().unwrap();
+                if (c>0) || (c==0 && b>0) ||(c==0 && b==0 && a>=0){
+                    println!("a={},b={},c={}",a,b,c);
+                    if a==0 && b==0 && c==0{
+                        hamR[[0,0]]=a;
+                        hamR[[0,1]]=b;
+                        hamR[[0,2]]=c;
+                        for ind_i in 0..nsta{
+                            for ind_j in 0..nsta{
+                                let mut string=reads[i*nsta*nsta+ind_i*nsta+ind_j+n_line].trim().split_whitespace();
+                                let re=string.nth(5).unwrap().parse::<f64>().unwrap();
+                                let im=string.next().unwrap().parse::<f64>().unwrap();
+                                ham[[0,ind_i,ind_j]]=Complex::new(re,im);
+                            }
+                        }
+                    }else{
+                        hamR.append(Axis(0),arr2(&[[a,b,c]]).view()).unwrap();
+                        let mut matrix=Array3::<Complex<f64>>::zeros((1,nsta,nsta));
+                        for ind_i in 0..nsta{
+                            for ind_j in 0..nsta{
+                                let mut string=reads[i*nsta*nsta+ind_i*nsta+ind_j+n_line].trim().split_whitespace();
+                                let re=string.nth(5).unwrap().parse::<f64>().unwrap();
+                                let im=string.next().unwrap().parse::<f64>().unwrap();
+                                matrix[[0,ind_i,ind_j]]=Complex::new(re,im);
+                            }
+                        }
+                        ham.append(Axis(0),matrix.view()).unwrap();
+                    }
+                }
+            }
+            //开始读取 .win 文件
+            let mut reads:Vec<String>=Vec::new();
+            let mut win_path=file_path.clone();
+            win_path.push_str(".win"); //文件的位置
+            let path=Path::new(&xyz_path); //转化为路径格式
+            let hr=File::open(path).expect("Unable open the file, please check if have hr file");
+            let reader = BufReader::new(hr);
+            let mut reads:Vec<String>=Vec::new();
+            for line in reader.lines() {
+                let line = line.unwrap();
+                reads.push(line.clone());
+            }
+            let read_iter=reads.iter();
+            let mut lat=Array2::<f64>::zeros((3,3)); //晶格轨道坐标初始化
+            let mut spin:bool=false; //体系自旋初始化
+            let mut natom:usize=0; //原子位置初始化
+            let mut atom=Array2::<f64>::zeros((1,3)); //原子位置坐标初始化
+            loop{
+                let a=read_iter.next();
+                if a==None{
+                    break;
+                }else{
+                    if a.includes("begin unit_cell_cart") {
+                        let lat1=read_iter.nest().trim().split_whitespace(); //将数字放到
+                        let lat2=read_iter.nest().trim().split_whitespace();
+                        let lat3=read_iter.nest().trim().split_whitespace();
+                        for i in 0..3{
+                            lat[[0,i]]=lat1.nest().unwrap().parse::<f64>().unwrap();
+                            lat[[1,i]]=lat2.nest().unwrap().parse::<f64>().unwrap();
+                            lat[[2,i]]=lat3.nest().unwrap().parse::<f64>().unwrap();
+                        }
+                    } else if a.includes("spinors") && (a.includes("T") || a.includes("t")){
+                        spin=true;
+                    }else if a.includes("begin projections"){
+                        loop{
+                            let string=read_iter.nest();
+                            if string.includes("end projections"){
+                                break
+                            }else{ 
+                                let a:Vec<&str>=string.split(|c| c==',' || c==';' || c==':').collect();
+                            }
+                        }
+                    }
+                }
+            }
+            //开始读取 seedname_centres.xyz 文件
+            let mut reads:Vec<String>=Vec::new();
+            let mut xyz_path=file_path.clone();
+            xyz_path.push_str("_centres.xyz");
+            let path=Path::new(&xyz_path);
+            let hr=File::open(path).expect("Unable open the file, please check if have hr file");
+            let reader = BufReader::new(hr);
+            let mut reads:Vec<String>=Vec::new();
+            for line in reader.lines() {
+                let line = line.unwrap();
+                reads.push(line.clone());
+            }
+            let nsta=reads[0].trim().parse::<usize>().unwrap();
+            let norb=if spin{nsta/2}else{nsta};
+        }
     }
 }
 
@@ -287,7 +458,7 @@ mod tests {
         println!("{}",dim_r);
         model.add_hop(3.0+1.0*li,0,1,array![0,0]);
         println!("{}",model.ham);
-        let nk:usize=100;
+        let nk:usize=1000;
         let path=[[0.0,0.0],[1.0/3.0,1.0/3.0],[0.5,0.0],[0.0,0.0]];
         let path=arr2(&path);
         let (k_vec,k_dist,k_node)=model.k_path(&path,nk);
@@ -297,7 +468,7 @@ mod tests {
         println!("{:?}",k_node);
 */
        // let kvec=k_vec.slice(s![0,..]).to_owned();
-        let (eval,evec)=model.solve_all(&k_vec);
+        let (eval,evec)=model.solve_all_parallel(&k_vec);
         println!("{:?}",eval);
         model.show_band(&path,nk);
     }
