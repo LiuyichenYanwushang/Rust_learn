@@ -647,6 +647,7 @@ impl Model{
         let vectors=Array3::from_shape_vec((nk, self.nsta,self.nsta), evec.into_iter().flatten().collect()).unwrap();
         (band,vectors)
     }
+    /*
     pub fn cut_piece(&self,num:usize,dir:usize)->Model{
         if num<1{
             panic!("Wrong, the num={} is less than 1");
@@ -665,6 +666,7 @@ impl Model{
         }
 
     }
+    */
     pub fn dos(&self,k_mesh:&Array1::<usize>,E_min:f64,E_max:f64,E_n:usize,sigma:f64)->(Array1::<f64>,Array1::<f64>){
         let kvec:Array2::<f64>=gen_kmesh(&k_mesh);
         let band=self.solve_band_all_parallel(&kvec);
@@ -776,10 +778,6 @@ impl Model{
         let conductivity:f64=omega.sum()/(nk as f64)*(2.0*PI).powi(self.dim_r as i32)/self.lat.det().unwrap();
         conductivity
     }
-/*
-    pub fn Hall_conductivity_adapted(&self,k_mesh:&Array1::<usize>,dir_1:&Array1::<f64>,dir_2:&Array1::<f64>,T:f64,og:f64,mu:f64,spin:usize,eta:f64,re_err:f64,ab_err:f64)->f64{
-    }
-    */
     pub fn show_band(&self,path:&Array2::<f64>,label:&Vec<&str>,nk:usize,name:&str)-> std::io::Result<()>{
         use std::fs::create_dir_all;
         use std::path::Path;
