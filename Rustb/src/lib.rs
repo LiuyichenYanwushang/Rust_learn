@@ -8,6 +8,7 @@ use ndarray_linalg::{Eigh, UPLO};
 use rayon::prelude::*;
 use std::io::Write;
 use std::fs::File;
+use partial_application::partial;
 ///这个Model结构存储了一个TB模型所有的需要的信息
 ///
 ///dim_r:模型的维度, 这里我们不区分 dim_k 和 dim_r, 默认是一致的, 请使用者自行设置二维体系.
@@ -111,6 +112,47 @@ pub fn gen_kmesh(k_mesh:&Array1::<usize>)->Array2::<f64>{
     }
     let mut usek=Array1::<f64>::zeros(dim);
     gen_kmesh_arr(&k_mesh,0,usek)
+}
+pub fn gen_krange(k_mesh:&Array1::<usize>)->Array3::<f64>{
+    let dim_r=k_mesh.len();
+    let mut k_range=Array3::<f64>::zeros((0,dim_r,2));
+    if dim_r==1{
+        for i in 0..k_mesh[[0]]-1{
+            let mut k=Array2::<f64>::zeros((dim_r,2));
+            k[[0,0]]=(i as f64)/((k_mesh[[0]]-1) as f64);
+            k[[0,1]]=((i+1) as f64)/((k_mesh[[0]]-1) as f64);
+            k_range.push(Axis(0),k.view()).unwrap();
+        }
+    }else if dim_r==2{
+        for i in 0..k_mesh[[0]]-1{
+            for j in 0..k_mesh[[1]]-1{
+                let mut k=Array2::<f64>::zeros((dim_r,2));
+                k[[0,0]]=(i as f64)/((k_mesh[[0]]-1) as f64);
+                k[[0,1]]=((i+1) as f64)/((k_mesh[[0]]-1) as f64);
+                k[[1,0]]=(j as f64)/((k_mesh[[1]]-1) as f64);
+                k[[1,1]]=((j+1) as f64)/((k_mesh[[1]]-1) as f64);
+                k_range.push(Axis(0),k.view()).unwrap();
+            }
+        }
+    }else if dim_r==3{
+        for i in 0..k_mesh[[0]]-1{
+            for j in 0..k_mesh[[1]]-1{
+                for ks in 0..k_mesh[[2]]-1{
+                    let mut k=Array2::<f64>::zeros((dim_r,2));
+                    k[[0,0]]=(i as f64)/((k_mesh[[0]]-1) as f64);
+                    k[[0,1]]=((i+1) as f64)/((k_mesh[[0]]-1) as f64);
+                    k[[1,0]]=(j as f64)/((k_mesh[[1]]-1) as f64);
+                    k[[1,1]]=((j+1) as f64)/((k_mesh[[1]]-1) as f64);
+                    k[[2,0]]=(ks as f64)/((k_mesh[[1]]-1) as f64);
+                    k[[2,1]]=((ks+1) as f64)/((k_mesh[[1]]-1) as f64);
+                    k_range.push(Axis(0),k.view()).unwrap();
+                }
+            }
+        }
+    }else{
+        panic!("Wrong, the dim should be 1,2 or 3, but you give {}",dim_r);
+    }
+    k_range
 }
 pub fn comm(A:&Array2::<Complex<f64>>,B:&Array2::<Complex<f64>>)->Array2::<Complex<f64>>{
     let A0=A.clone();
@@ -357,6 +399,7 @@ pub fn adapted_integrate_loop(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::<
     //对于二维, 我们依旧假设线性插值, 这样我们考虑的就是二维平面上的三角形上的任意一点的值是到其余三个点的距离的加权系数的平均值, 我们将四边形变成两个三角形来考虑.
         let area_1:Array2::<f64>=arr2(&[[k_range.row(0)[0],k_range.row(1)[0]],[k_range.row(0)[1],k_range.row(1)[0]],[k_range.row(0)[0],k_range.row(1)[1]]]);//第一个三角形
         let area_2:Array2::<f64>=arr2(&[[k_range.row(0)[1],k_range.row(1)[1]],[k_range.row(0)[1],k_range.row(1)[0]],[k_range.row(0)[0],k_range.row(1)[1]]]);//第二个三角形
+        /* 我不再使用这个方法了, 把这个算法单独分离需要多次重复计算相同的点, 太耗时了
         fn cal_integrate_2D(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>)->f64{
             //这个是用来进行线性插值积分的结果, 给出三个点和函数, 计算得到对应的插值积分结果
             let mut S:Array2::<f64>=kvec.clone();
@@ -370,6 +413,7 @@ pub fn adapted_integrate_loop(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::<
             all=all/6.0;
             all
         }
+        */
         fn adapt_integrate_triangle(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>,re_err:f64,ab_err:f64)->f64{
             //这个函数是用来进行自适应算法的
             let mut use_kvec=vec![(kvec.clone(),re_err,ab_err)];
@@ -1180,6 +1224,18 @@ impl Model{
         let conductivity:f64=omega.sum()/(nk as f64)*(2.0*PI).powi(self.dim_r as i32)/self.lat.det().unwrap();
         conductivity
     }
+    pub fn Hall_conductivity_adapted(&self,k_mesh:&Array1::<usize>,dir_1:&Array1::<f64>,dir_2:&Array1::<f64>,T:f64,og:f64,mu:f64,spin:usize,eta:f64,re_err:f64,ab_err:f64)->f64{
+        let mut k_range=gen_krange(k_mesh);//将要计算的区域分成小块
+        //let use_fn=partial!(self.berry_curvature_onek=>_,&dir_1,&dir_2,T,og,mu,spin,eta);//给出一个已经包含默认的变量的函数, 方便我们的计算.
+        //let inte=partial!(adapted_integrate_loop=>&use_fn,_,re_err,ab_err);
+        let use_fn=|k0:&Array1::<f64>| self.berry_curvature_onek(k0,&dir_1,&dir_2,T,og,mu,spin,eta);
+        //let use_fn=use_fn as fn(&Array1::<f64>)->f64
+        let inte=|k_range| adapted_integrate_loop(&use_fn,&k_range,re_err,ab_err);
+        let omega:Vec<f64>=k_range.axis_iter(Axis(0)).into_par_iter().map(|x| { inte(x.to_owned())}).collect();
+        let omega:Array1::<f64>=arr1(&omega);
+        let conductivity:f64=omega.sum()*(2.0*PI).powi(self.dim_r as i32)/self.lat.det().unwrap();
+        conductivity
+    }
     pub fn show_band(&self,path:&Array2::<f64>,label:&Vec<&str>,nk:usize,name:&str)-> std::io::Result<()>{
         use std::fs::create_dir_all;
         use std::path::Path;
@@ -1558,6 +1614,10 @@ mod tests {
         let (eval,evec)=model.solve_onek(&arr1(&[0.3,0.5]));
         let conductivity=model.Hall_conductivity(&kmesh,&dir_1,&dir_2,T,og,mu,spin,eta);
         println!("{}",conductivity/(2.0*PI));
+        let nk:usize=11;
+        let kmesh=arr1(&[nk,nk]);
+        let conductivity=model.Hall_conductivity_adapted(&kmesh,&dir_1,&dir_2,T,og,mu,spin,eta,1e-5,1e-5);
+        println!("{}",conductivity/(2.0*PI));
 
     }
     #[test]
@@ -1661,6 +1721,10 @@ mod tests {
         let kmesh=arr1(&[nk,nk]);
         let (eval,evec)=model.solve_onek(&arr1(&[0.3,0.5]));
         let conductivity=model.Hall_conductivity(&kmesh,&dir_1,&dir_2,T,og,mu,spin,eta);
+        println!("{}",conductivity/(2.0*PI));
+        let nk:usize=11;
+        let kmesh=arr1(&[nk,nk]);
+        let conductivity=model.Hall_conductivity_adapted(&kmesh,&dir_1,&dir_2,T,og,mu,spin,eta,1e-3,1e-3);
         println!("{}",conductivity/(2.0*PI));
     }
 }

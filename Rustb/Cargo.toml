@@ -16,3 +16,4 @@ num-complex="*"
 ndarray-linalg={version="*",features=["intel-mkl"]}
 gnuplot="*"
 rayon="*"
+partial_application="*"
