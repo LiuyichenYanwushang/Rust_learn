@@ -1,5 +1,5 @@
 [package]
-name = "Rustb"
+name = "Pt_1"
 version = "0.1.0"
 edition = "2021"
 
@@ -16,3 +16,5 @@ num-complex="*"
 ndarray-linalg={version="*",features=["intel-mkl"]}
 gnuplot="*"
 rayon="*"
+partial_application="*"
+Rustb={path="../../Rustb"}
