@@ -9,10 +9,7 @@ lto = "fat"
 codegen-units = 1
 
 [dependencies]
-num="*"
 ndarray={ version="*", features = ["rayon"] }
-nalgebra="*"
 num-complex="*"
 ndarray-linalg={version="*",features=["intel-mkl"]}
-gnuplot="*"
 rayon="*"

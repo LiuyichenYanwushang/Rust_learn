@@ -1,10 +1,11 @@
-use nalgebra::Complex;
+#![allow(warnings)]
+use num_complex::Complex;
 use ndarray::linalg::kron;
 use ndarray::prelude::*;
-use ndarray::*;
 use ndarray_linalg::*;
 use std::f64::consts::PI;
 use ndarray_linalg::{Eigh, UPLO};
+use ndarray_linalg::conjugate;
 use rayon::prelude::*;
 use std::io::Write;
 use std::fs::File;
@@ -35,19 +36,30 @@ use std::fs::File;
 ///rmatrix:模型的位置矩阵, 即 <m0|r|nR>.
 #[allow(non_snake_case)]
 pub struct Model{
-    pub dim_r:usize,                    //模型的实空间维度
-    //pub dim_k:usize,                    //模型的k空间维度
-    pub norb:usize,                     //模型的轨道数目
-    pub nsta:usize,                     //模型的态的数目, 如果开启自旋, nsta=norb*2
-    pub natom:usize,                    //模型的原子数目, 后面的 atom 和 atom_list 是用来存储原子位置, 以及 每一个原子对应的轨道数目
-    pub spin:bool,                      //模型是否开启自旋, 若开启, spin=true
-    pub lat:Array2::<f64>,              //模型的晶格矢量, 为一个 dim_r*dim_r大小的矩阵, axis0方向存储着1*dim_r的晶格矢量
-    pub orb:Array2::<f64>,              //模型的轨道位置, 我们统一使用分数坐标
-    pub atom:Array2::<f64>,             //模型的原子位置, 也是分数坐标.
-    pub atom_list:Vec<usize>,           //模型的原子中的轨道数目, 和原子位置的顺序一致.
-    pub ham:Array3::<Complex<f64>>,     //模型的哈密顿量, <m0|H|nR>, 为一个 n_R*nsta*nsta的三维复数张量, 第一个nsta*nsta的矩阵对应的是原胞内的hopping,即 <m0|H|n0>, 后面对应的是 hamR中的hopping.
-    pub hamR:Array2::<isize>,           //模型的原胞间haopping的距离, 即 <m0|H|nR> 中的 R
-    pub rmatrix:Array4::<Complex<f64>>  //模型的位置矩阵, 即 <m0|r|nR>.
+    ///模型的实空间维度
+    pub dim_r:usize,                    
+    ///模型的轨道数目
+    pub norb:usize,                     
+    ///模型的态的数目, 如果开启自旋, nsta=norb*2
+    pub nsta:usize,                     
+    ///模型的原子数目, 后面的 atom 和 atom_list 是用来存储原子位置, 以及 每一个原子对应的轨道数目
+    pub natom:usize,                    
+    ///模型是否开启自旋, 若开启, spin=true
+    pub spin:bool,                      
+    ///模型的晶格矢量, 为一个 dim_r*dim_r大小的矩阵, axis0方向存储着1*dim_r的晶格矢量
+    pub lat:Array2::<f64>,              
+    ///模型的轨道位置, 我们统一使用分数坐标
+    pub orb:Array2::<f64>,              
+    ///模型的原子位置, 也是分数坐标.
+    pub atom:Array2::<f64>,             
+    ///模型的原子中的轨道数目, 和原子位置的顺序一致.
+    pub atom_list:Vec<usize>,           
+    ///模型的哈密顿量, <m0|H|nR>, 为一个 n_R\*nsta\*nsta的三维复数张量, 第一个nsta*nsta的矩阵对应的是原胞内的hopping,即 <m0|H|n0>, 后面对应的是 hamR中的hopping.
+    pub ham:Array3::<Complex<f64>>,     
+    ///模型的原胞间haopping的距离, 即 <m0|H|nR> 中的 R
+    pub hamR:Array2::<isize>,           
+    ///模型的位置矩阵, 即 <m0|r|nR>.
+    pub rmatrix:Array4::<Complex<f64>>, 
 }
 #[allow(non_snake_case)]
 pub fn find_R(hamR:&Array2::<isize>,R:&Array1::<isize>)->bool{
@@ -77,37 +89,37 @@ pub fn index_R(hamR:&Array2::<isize>,R:&Array1::<isize>)->usize{
             return i
         }
     }
-    0
+    panic!("Wrong, not find");
 }
 #[allow(non_snake_case)]
 pub fn gen_kmesh(k_mesh:&Array1::<usize>)->Array2::<f64>{
     let dim:usize=k_mesh.len();
     let mut nk:usize=1;
     for i in 0..dim{
-        nk*=k_mesh[[i]]-1;
+        nk*=k_mesh[[i]];
     }
     fn gen_kmesh_arr(k_mesh:&Array1::<usize>,r0:usize,mut usek:Array1::<f64>)->Array2::<f64>{
         let dim:usize=k_mesh.len();
         let mut kvec=Array2::<f64>::zeros((0,dim));
         if r0==0{
-            for i in 0..(k_mesh[[r0]]-1){
+            for i in 0..(k_mesh[[r0]]){
                let mut usek=Array1::<f64>::zeros(dim);
-               usek[[r0]]=(i as f64)/((k_mesh[[r0]]-1) as f64);
+               usek[[r0]]=(i as f64)/((k_mesh[[r0]]) as f64);
                let k0:Array2::<f64>=gen_kmesh_arr(&k_mesh,r0+1,usek);
                kvec.append(Axis(0),k0.view()).unwrap();
             }
             return kvec
         }else if r0<k_mesh.len()-1{
-            for i in 0..(k_mesh[[r0]]-1){
+            for i in 0..(k_mesh[[r0]]){
                let mut kk=usek.clone();
-               kk[[r0]]=(i as f64)/((k_mesh[[r0]]-1) as f64);
+               kk[[r0]]=(i as f64)/((k_mesh[[r0]]) as f64);
                let k0:Array2::<f64>=gen_kmesh_arr(&k_mesh,r0+1,kk);
                kvec.append(Axis(0),k0.view()).unwrap();
             }
             return kvec
         }else{
-            for i in 0..(k_mesh[[r0]]-1){
-               usek[[r0]]=(i as f64)/((k_mesh[[r0]]-1) as f64);
+            for i in 0..(k_mesh[[r0]]){
+               usek[[r0]]=(i as f64)/((k_mesh[[r0]]) as f64);
                kvec.push_row(usek.view()).unwrap();
             }
             return kvec
@@ -181,186 +193,6 @@ pub fn cal_V(k_point:&Array2::<f64>)->f64{
     let S:f64=S.det().expect("Wrong, S'det is 0").abs();
     S
 }
-#[allow(non_snake_case)]
-pub fn adapted_integrate(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::<f64>,re_err:f64,ab_err:f64)->f64{
-    ///对于任意维度的积分 n, 我们的将区域刨分成 n+1面体的小块, 然后用线性插值来近似这个n+1的积分结果
-    ///
-    ///积分的公式为: 
-    ///
-    ///设被积函数为 f(x1,x2,...,xn), 存在n+1个点 (y01,y02,...y0n)...(yn1,yn2... ynn), 对应的值为 z0,z1,...,zn
-    ///
-    ///这样我们就能得到 1/(n+1)! *\sum_{i}^n z_i *dV, dV 是正 n+1面体的体积.
-    ///我们采用的是递归算法, 优点是写起来容易一点, 缺点是容易堆栈不足爆掉
-
-    let dim=k_range.len_of(Axis(0));
-    if dim==1{
-        //对于一维情况, 我们就是用梯形算法的 (a+b)*h/2, 这里假设的是函数的插值为线性插值.
-        let kvec_l:Array1::<f64>=arr1(&[k_range[[0,0]]]);
-        let kvec_r:Array1::<f64>=arr1(&[k_range[[0,1]]]);
-        let kvec_m:Array1::<f64>=arr1(&[(k_range[[0,1]]+k_range[[0,0]])/2.0]);
-        let dk:f64=k_range[[0,1]]-k_range[[0,0]];
-        let y_l:f64=f0(&kvec_l);
-        let y_r:f64=f0(&kvec_r);
-        let y_m:f64=f0(&kvec_m);
-        let all:f64=(y_l+y_r)*dk/2.0;
-        let all_1=(y_l+y_m)*dk/4.0;
-        let all_2=(y_r+y_m)*dk/4.0;
-        let err=all_1+all_2-all;
-        let abs_err= if ab_err>all*re_err{ab_err} else {all*re_err};
-        if err< abs_err{
-            return all_1+all_2;
-        }else{
-            let k_range_l=arr2(&[[kvec_l[[0]],kvec_m[[0]]]]);
-            let k_range_r=arr2(&[[kvec_m[[0]],kvec_r[[0]]]]);
-            let all_1=adapted_integrate(f0,&k_range_l,re_err,ab_err/2.0);
-            let all_2=adapted_integrate(f0,&k_range_r,re_err,ab_err/2.0);
-            return all_1+all_2;
-        }
-    }else if dim==2{
-    //对于二维, 我们依旧假设线性插值, 这样我们考虑的就是二维平面上的三角形上的任意一点的值是到其余三个点的距离的加权系数的平均值, 我们将四边形变成两个三角形来考虑.
-        let area_1:Array2::<f64>=arr2(&[[k_range.row(0)[0],k_range.row(1)[0]],[k_range.row(0)[1],k_range.row(1)[0]],[k_range.row(0)[0],k_range.row(1)[1]]]);//第一个三角形
-        let area_2:Array2::<f64>=arr2(&[[k_range.row(0)[1],k_range.row(1)[1]],[k_range.row(0)[1],k_range.row(1)[0]],[k_range.row(0)[0],k_range.row(1)[1]]]);//第二个三角形
-        fn cal_integrate_2D(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>)->f64{
-            //这个是用来进行线性插值积分的结果, 给出三个点和函数, 计算得到对应的插值积分结果
-            let mut S:Array2::<f64>=kvec.clone();
-            S.push(Axis(1),Array1::ones(3).view());
-            let S:f64=S.det().expect("Wrong, S'det is 0").abs();
-            let mut all:f64=0.0;
-            for i in 0..kvec.len_of(Axis(0)){
-                all+=f0(&kvec.row(i).to_owned())
-            }
-            all*=S;
-            all=all/6.0;
-            all
-        }
-        fn adapt_integrate_triangle(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>,re_err:f64,ab_err:f64)->f64{
-            //这个函数是用来进行自适应算法的
-            let mut S:Array2::<f64>=kvec.clone();
-            S.push(Axis(1),Array1::ones(3).view());
-            let S:f64=S.det().expect("Wrong, S'det is 0").abs();
-
-            let all=cal_integrate_2D(f0,&kvec);
-            let kvec_m=kvec.mean_axis(Axis(0)).unwrap();
-            let mut kvec_1=Array2::<f64>::zeros((0,2));
-            kvec_1.push_row(kvec.row(0));
-            kvec_1.push_row(kvec.row(1));
-            kvec_1.push_row(kvec_m.view());
-            let mut kvec_2=Array2::<f64>::zeros((0,2));
-            kvec_2.push_row(kvec.row(0));
-            kvec_2.push_row(kvec_m.view());
-            kvec_2.push_row(kvec.row(2));
-            let mut kvec_3=Array2::<f64>::zeros((0,2));
-            kvec_3.push_row(kvec_m.view());
-            kvec_3.push_row(kvec.row(1));
-            kvec_3.push_row(kvec.row(2));
-            let all_1=cal_integrate_2D(f0,&kvec_1);
-            let all_2=cal_integrate_2D(f0,&kvec_2);
-            let all_3=cal_integrate_2D(f0,&kvec_3);
-            let all_new=all_1+all_2+all_3;
-            let abs_err:f64= if ab_err>all*re_err{ab_err} else {all*re_err};
-            if (all_new-all).abs()> abs_err && S>1e-8{
-               //let all_1=adapt_integrate_triangle(f0,&kvec_1,re_err/3.0,ab_err/3.0);
-               //let all_2=adapt_integrate_triangle(f0,&kvec_2,re_err/3.0,ab_err/3.0);
-               //let all_3=adapt_integrate_triangle(f0,&kvec_3,re_err/3.0,ab_err/3.0);
-               //all_new=all_1+all_2+all_3;
-               return adapt_integrate_triangle(f0,&kvec_1,re_err/3.0,ab_err/3.0)+adapt_integrate_triangle(f0,&kvec_2,re_err/3.0,ab_err/3.0)+adapt_integrate_triangle(f0,&kvec_3,re_err/3.0,ab_err/3.0);
-            }else{
-                return all_new;
-            }
-        }
-        let all_1=adapt_integrate_triangle(f0,&area_1,re_err,ab_err/2.0);
-        let all_2=adapt_integrate_triangle(f0,&area_2,re_err,ab_err/2.0);
-        return all_1+all_2;
-    }else if dim==3{
-    //对于三位情况, 需要用到四面体, 所以需要先将6面体变成6个四面体
-        fn cal_integrate_3D(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>)->f64{
-            //这个是用来进行线性插值积分的结果, 给出三个点和函数, 计算得到对应的插值积分结果
-            let mut S=kvec.clone();
-            S.push(Axis(1),Array1::ones(4).view());
-            let S:f64=S.det().expect("Wrong, S'det is 0").abs();
-            let mut all:f64=0.0;
-            for i in 0..kvec.len_of(Axis(0)){
-                all+=f0(&kvec.row(i).to_owned())
-            }
-            all*=S;
-            all=all/24.0;
-            all
-        }
-        fn adapt_integrate_tetrahedron(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>,re_err:f64,ab_err:f64)->f64{
-            //这个函数是用来进行自适应算法的
-            let mut S=kvec.clone();
-            S.push(Axis(1),Array1::ones(4).view());
-            let S:f64=S.det().expect("Wrong, S'det is 0").abs();//先求一下体积
-
-            let all=cal_integrate_3D(f0,&kvec);
-            let kvec_m=kvec.mean_axis(Axis(0)).unwrap();
-            /////////////////////////
-            let mut kvec_1=Array2::<f64>::zeros((0,3));
-            kvec_1.push_row(kvec.row(0));
-            kvec_1.push_row(kvec.row(1));
-            kvec_1.push_row(kvec.row(2));
-            kvec_1.push_row(kvec_m.view());
-            
-            let mut kvec_2=Array2::<f64>::zeros((0,3));
-            kvec_2.push_row(kvec.row(0));
-            kvec_2.push_row(kvec.row(1));
-            kvec_2.push_row(kvec_m.view());
-            kvec_2.push_row(kvec.row(3));
-            let mut kvec_3=Array2::<f64>::zeros((0,3));
-            kvec_3.push_row(kvec.row(0));
-            kvec_3.push_row(kvec_m.view());
-            kvec_3.push_row(kvec.row(2));
-            kvec_3.push_row(kvec.row(3));
-            let mut kvec_4=Array2::<f64>::zeros((0,3));
-            kvec_4.push_row(kvec_m.view());
-            kvec_4.push_row(kvec.row(1));
-            kvec_4.push_row(kvec.row(2));
-            kvec_4.push_row(kvec.row(3));
-            let all_1=cal_integrate_3D(f0,&kvec_1);
-            let all_2=cal_integrate_3D(f0,&kvec_2);
-            let all_3=cal_integrate_3D(f0,&kvec_3);
-            let all_4=cal_integrate_3D(f0,&kvec_4);
-            let mut all_new=all_1+all_2+all_3+all_4;
-            let abs_err= if ab_err>all*re_err{ab_err} else {all*re_err};
-            if (all_new-all).abs()> abs_err && S > 1e-9{
-                let all_1=adapt_integrate_tetrahedron(f0,&kvec_1,re_err,ab_err/4.0);
-                let all_2=adapt_integrate_tetrahedron(f0,&kvec_2,re_err,ab_err/4.0);
-                let all_3=adapt_integrate_tetrahedron(f0,&kvec_3,re_err,ab_err/4.0);
-                let all_4=adapt_integrate_tetrahedron(f0,&kvec_4,re_err,ab_err/4.0);
-                all_new=all_1+all_2+all_3+all_4;
-            }
-            all_new
-        }
-        let area_1:Array2::<f64>=arr2(&[[k_range.row(0)[0],k_range.row(1)[0],k_range.row(2)[0]],
-                                        [k_range.row(0)[1],k_range.row(1)[0],k_range.row(2)[0]],
-                                        [k_range.row(0)[0],k_range.row(1)[1],k_range.row(2)[0]],
-                                        [k_range.row(0)[0],k_range.row(1)[0],k_range.row(2)[1]]]);//第一个四面体
-        let area_2:Array2::<f64>=arr2(&[[k_range.row(0)[1],k_range.row(1)[1],k_range.row(2)[0]],
-                                        [k_range.row(0)[1],k_range.row(1)[0],k_range.row(2)[0]],
-                                        [k_range.row(0)[0],k_range.row(1)[1],k_range.row(2)[0]],
-                                        [k_range.row(0)[1],k_range.row(1)[1],k_range.row(2)[1]]]);//第二个四面体
-        let area_3:Array2::<f64>=arr2(&[[k_range.row(0)[1],k_range.row(1)[0],k_range.row(2)[1]],
-                                        [k_range.row(0)[1],k_range.row(1)[0],k_range.row(2)[0]],
-                                        [k_range.row(0)[0],k_range.row(1)[0],k_range.row(2)[1]],
-                                        [k_range.row(0)[1],k_range.row(1)[1],k_range.row(2)[1]]]);//第三个四面体
-        let area_4:Array2::<f64>=arr2(&[[k_range.row(0)[0],k_range.row(1)[1],k_range.row(2)[1]],
-                                        [k_range.row(0)[0],k_range.row(1)[0],k_range.row(2)[1]],
-                                        [k_range.row(0)[0],k_range.row(1)[1],k_range.row(2)[0]],
-                                        [k_range.row(0)[1],k_range.row(1)[1],k_range.row(2)[1]]]);//第一个四面体
-        let area_5:Array2::<f64>=arr2(&[[k_range.row(0)[0],k_range.row(1)[0],k_range.row(2)[1]],
-                                        [k_range.row(0)[1],k_range.row(1)[1],k_range.row(2)[1]],
-                                        [k_range.row(0)[0],k_range.row(1)[1],k_range.row(2)[0]],
-                                        [k_range.row(0)[1],k_range.row(1)[0],k_range.row(2)[0]]]);//第一个四面体
-        let all_1=adapt_integrate_tetrahedron(f0,&area_1,re_err,ab_err/5.0);
-        let all_2=adapt_integrate_tetrahedron(f0,&area_2,re_err,ab_err/5.0);
-        let all_3=adapt_integrate_tetrahedron(f0,&area_3,re_err,ab_err/5.0);
-        let all_4=adapt_integrate_tetrahedron(f0,&area_4,re_err,ab_err/5.0);
-        let all_5=adapt_integrate_tetrahedron(f0,&area_5,re_err,ab_err/5.0);
-        return all_1+all_2+all_3+all_4+all_5
-    }else{
-        panic!("wrong, the row_dim if k_range must be 1,2 or 3, but you's give {}",dim);
-    }
-}
 
 pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::<f64>,re_err:f64,ab_err:f64)->f64{
     ///对于任意维度的积分 n, 我们的将区域刨分成 n+1面体的小块, 然后用线性插值来近似这个n+1的积分结果
@@ -408,9 +240,7 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
             let mut result=0.0;
             let mut use_kvec=vec![(kvec.clone(),re_err,ab_err,s1,s2,s3)];
             while let Some((kvec,re_err,ab_err,s1,s2,s3))=use_kvec.pop() {
-                let mut S=kvec.clone();
-                S.push(Axis(1),Array1::ones(3).view());
-                let S:f64=S.det().expect("Wrong, S'det is 0").abs();//先求一下体积
+                let S:f64=((kvec[[1,0]]*kvec[[2,1]]-kvec[[2,0]]*kvec[[1,1]])-(kvec[[0,0]]*kvec[[2,1]]-kvec[[0,1]]*kvec[[2,0]])+(kvec[[0,0]]*kvec[[1,1]]-kvec[[1,0]]*kvec[[0,1]])).abs();
                 let kvec_m=kvec.mean_axis(Axis(0)).unwrap();
                 let sm:f64=f0(&kvec_m.to_owned());
 
@@ -451,30 +281,11 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
         return all_1+all_2;
     }else if dim==3{
     //对于三位情况, 需要用到四面体, 所以需要先将6面体变成6个四面体
-        fn cal_integrate_3D(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>)->f64{
-            //这个是用来进行线性插值积分的结果, 给出三个点和函数, 计算得到对应的插值积分结果
-            let mut S=kvec.clone();
-            S.push(Axis(1),Array1::ones(4).view());
-            let S:f64=S.det().expect("Wrong, S'det is 0").abs();
-            let mut all:f64=0.0;
-            for i in 0..kvec.len_of(Axis(0)){
-                all+=f0(&kvec.row(i).to_owned())
-            }
-            all*=S;
-            all=all/24.0;
-            all
-        }
-        fn adapt_integrate_tetrahedron(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>,re_err:f64,ab_err:f64,s1:f64,s2:f64,s3:f64,s4:f64)->f64{
+        fn adapt_integrate_tetrahedron(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>,re_err:f64,ab_err:f64,s1:f64,s2:f64,s3:f64,s4:f64,S:f64)->f64{
             //这个函数是用来进行自适应算法的
             let mut result=0.0;
-
-            let mut use_kvec=vec![(kvec.clone(),re_err,ab_err,s1,s2,s3,s4)];
-            while let Some((kvec,re_err,ab_err,s1,s2,s3,s4))=use_kvec.pop() {
-                let mut S=kvec.clone();
-                S.push(Axis(1),Array1::ones(4).view());
-                let S:f64=S.det().expect("Wrong, S'det is 0").abs();//先求一下体积
-
-                let all=cal_integrate_3D(f0,&kvec);
+            let mut use_kvec=vec![(kvec.clone(),re_err,ab_err,s1,s2,s3,s4,S)];
+            while let Some((kvec,re_err,ab_err,s1,s2,s3,s4,S))=use_kvec.pop() {
                 let kvec_m=kvec.mean_axis(Axis(0)).unwrap();
                 let sm=f0(&kvec_m.to_owned());
                 /////////////////////////
@@ -504,12 +315,13 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
 
                 let all=(s1+s2+s3+s4)*S/24.0;
                 let all_new=all/4.0*3.0+sm*S/24.0;
+                let S1=S/4.0;
                 let abs_err= if ab_err>all*re_err{ab_err} else {all*re_err};
                 if (all_new-all).abs()> abs_err && S > 1e-9{
-                    use_kvec.push((kvec_1.clone(),re_err,ab_err*0.25,s1,s2,s3,sm));
-                    use_kvec.push((kvec_2.clone(),re_err,ab_err*0.25,s1,s2,sm,s4));
-                    use_kvec.push((kvec_3.clone(),re_err,ab_err*0.25,s1,sm,s3,s4));
-                    use_kvec.push((kvec_4.clone(),re_err,ab_err*0.25,sm,s2,s3,s4));
+                    use_kvec.push((kvec_1.clone(),re_err,ab_err*0.25,s1,s2,s3,sm,S1));
+                    use_kvec.push((kvec_2.clone(),re_err,ab_err*0.25,s1,s2,sm,s4,S1));
+                    use_kvec.push((kvec_3.clone(),re_err,ab_err*0.25,s1,sm,s3,s4,S1));
+                    use_kvec.push((kvec_4.clone(),re_err,ab_err*0.25,sm,s2,s3,s4,S1));
                 }else{
                     result+=all_new;
                 }
@@ -531,11 +343,11 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
         let area_4:Array2::<f64>=arr2(&[[k_range.row(0)[0],k_range.row(1)[1],k_range.row(2)[1]],
                                         [k_range.row(0)[0],k_range.row(1)[0],k_range.row(2)[1]],
                                         [k_range.row(0)[0],k_range.row(1)[1],k_range.row(2)[0]],
-                                        [k_range.row(0)[1],k_range.row(1)[1],k_range.row(2)[1]]]);//第一个四面体
+                                        [k_range.row(0)[1],k_range.row(1)[1],k_range.row(2)[1]]]);//第四个四面体
         let area_5:Array2::<f64>=arr2(&[[k_range.row(0)[0],k_range.row(1)[0],k_range.row(2)[1]],
                                         [k_range.row(0)[1],k_range.row(1)[1],k_range.row(2)[1]],
                                         [k_range.row(0)[0],k_range.row(1)[1],k_range.row(2)[0]],
-                                        [k_range.row(0)[1],k_range.row(1)[0],k_range.row(2)[0]]]);//第一个四面体
+                                        [k_range.row(0)[1],k_range.row(1)[0],k_range.row(2)[0]]]);//第五个四面体
         let s1=f0(&area_1.row(0).to_owned());
         let s2=f0(&area_1.row(1).to_owned());
         let s3=f0(&area_2.row(0).to_owned());
@@ -544,19 +356,17 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
         let s6=f0(&area_3.row(0).to_owned());
         let s7=f0(&area_2.row(3).to_owned());
         let s8=f0(&area_4.row(0).to_owned());
-        let all_1=adapt_integrate_tetrahedron(f0,&area_1,re_err,ab_err/5.0,s1,s2,s4,s5);
-        let all_2=adapt_integrate_tetrahedron(f0,&area_2,re_err,ab_err/5.0,s3,s2,s4,s7);
-        let all_3=adapt_integrate_tetrahedron(f0,&area_3,re_err,ab_err/5.0,s6,s2,s5,s7);
-        let all_4=adapt_integrate_tetrahedron(f0,&area_4,re_err,ab_err/5.0,s8,s5,s4,s7);
-        let all_5=adapt_integrate_tetrahedron(f0,&area_5,re_err,ab_err/5.0,s5,s7,s4,s2);
+        let V=(k_range[[0,1]]-k_range[[0,0]])*(k_range[[1,1]]-k_range[[1,0]])*(k_range[[2,1]]-k_range[[2,0]]);
+        let all_1=adapt_integrate_tetrahedron(f0,&area_1,re_err,ab_err/6.0,s1,s2,s4,s5,V/6.0);
+        let all_2=adapt_integrate_tetrahedron(f0,&area_2,re_err,ab_err/6.0,s3,s2,s4,s7,V/6.0);
+        let all_3=adapt_integrate_tetrahedron(f0,&area_3,re_err,ab_err/6.0,s6,s2,s5,s7,V/6.0);
+        let all_4=adapt_integrate_tetrahedron(f0,&area_4,re_err,ab_err/6.0,s8,s5,s4,s7,V/6.0);
+        let all_5=adapt_integrate_tetrahedron(f0,&area_5,re_err,ab_err/3.0,s5,s7,s4,s2,V/3.0);
         return all_1+all_2+all_3+all_4+all_5
     }else{
         panic!("wrong, the row_dim if k_range must be 1,2 or 3, but you's give {}",dim);
     }
 }
-
-
-
 
 
 #[allow(non_snake_case)]
@@ -832,6 +642,7 @@ impl Model{
         }
     }
     #[allow(non_snake_case)]
+
     pub fn k_path(&self,path:&Array2::<f64>,nk:usize)->(Array2::<f64>,Array1::<f64>,Array1::<f64>){
         if self.dim_r==0{
             panic!("the k dimension of the model is 0, do not use k_path")
@@ -865,14 +676,11 @@ impl Model{
             let n_f=node_index[n];
             let kd_i=k_node[[n-1]];
             let kd_f=k_node[[n]];
-            //let k_i=path.slice(s![n-1,..]);
-            //let k_f=path.slice(s![n,..]);
             let k_i=path.row(n-1);
             let k_f=path.row(n);
             for j in n_i..n_f+1{
                 let frac:f64= ((j-n_i) as f64)/((n_f-n_i) as f64);
                 k_dist[[j]]=kd_i + frac*(kd_f-kd_i);
-                //k_vec.slice_mut(s![j,..]).assign(&((1.0-frac)*k_i.to_owned() +frac*k_f.to_owned()));
                 k_vec.row_mut(j).assign(&((1.0-frac)*k_i.to_owned() +frac*k_f.to_owned()));
 
             }
@@ -1095,26 +903,210 @@ impl Model{
         let vectors=Array3::from_shape_vec((nk, self.nsta,self.nsta), evec.into_iter().flatten().collect()).unwrap();
         (band,vectors)
     }
-    /*
+    ///这个函数是用来将model的某个方向进行截断的
+    ///num:截出多少个原胞
+    ///dir:方向
+    ///返回一个model, 其中 dir 和输入的model是一致的, 但是轨道数目和原子数目都会扩大num倍, 沿着dir方向没有胞间hopping.
     pub fn cut_piece(&self,num:usize,dir:usize)->Model{
         if num<1{
-            panic!("Wrong, the num={} is less than 1");
+            panic!("Wrong, the num={} is less than 1",num);
         }
-        let new_orb=Array2::<f64>::zeros((self.norb*num,self.dim_r));
+        let mut new_orb=Array2::<f64>::zeros((self.norb*num,self.dim_r));//定义一个新的轨道
+        let mut new_atom=Array2::<f64>::zeros((self.natom*num,self.dim_r));//定义一个新的原子
         let new_norb=self.norb*num;
         let new_nsta=self.nsta*num;
-        let mut new_lat=self.lat;
-        new_lat.slice_mut(s![dir,..]).assign(self.lat.slice(s![dir,..])*(num as f64));
+        let new_natom=self.nsta*num;
+        let mut new_atom_list:Vec<usize>=Vec::new();
+        let mut new_lat=self.lat.clone();
+        new_lat.row_mut(dir).assign(&(self.lat.row(dir).to_owned()*(num as f64)));
         for i in 0..num{
             for n in 0..self.norb{
-                let mut use_orb=self.orb.slice(s![n,..]);
-                use_orb[[dir]]*=1.0/(num as f64);
-                new_orb.slice_mut(s![i*self.norb+n,..]).assign(use_orb);
+                let mut use_orb=self.orb.row(n).to_owned();
+                use_orb[[dir]]=use_orb[[dir]]/(num as f64);
+                new_orb.row_mut(i*self.norb+n).assign(&use_orb);
+            }
+            for n in 0..self.natom{
+                let mut use_atom=self.atom.row(n).to_owned();
+                use_atom[[dir]]*=1.0/(num as f64);
+                new_atom.row_mut(i*self.natom+n).assign(&use_atom);
+                new_atom_list.push(self.atom_list[n]);
             }
         }
-
+        let mut new_ham=Array3::<Complex<f64>>::zeros((1,new_nsta,new_nsta));
+        let mut new_rmatrix=Array4::<Complex<f64>>::zeros((1,self.dim_r,new_nsta,new_nsta));
+        let mut new_hamR=Array2::<isize>::zeros((1,self.dim_r));
+        //新的轨道和原子构造完成, 开始构建哈密顿量
+        //let new_model=tb_model(self.dim_r,new_norb,new_lat,new_orb,self.spin,Some(new_natom),Some(new_atom),Some(atom_list));
+        //先尝试构建位置函数
+        let exist_r=self.rmatrix.len_of(Axis(0))!=1;
+        if self.rmatrix.len_of(Axis(0))==1{
+            for n in 0..num{
+                for i in 0..new_norb{
+                    for r in 0..self.dim_r{
+                        new_rmatrix[[0,r,i,i]]=Complex::new(new_orb[[i,r]],0.0);
+                        if self.spin{
+                            new_rmatrix[[0,r,i+new_norb,i+new_norb]]=Complex::new(new_orb[[i,r]],0.0);
+                        }
+                    }
+                }
+            }
+        }
+        let n_R=self.hamR.len_of(Axis(0));
+        for n in 0..num{
+            for i0 in 0..n_R{
+                let mut ind_R:Array1::<isize>=self.hamR.row(i0).to_owned();
+                let mut rmatrix=Array3::<Complex<f64>>::zeros((self.dim_r,new_nsta,new_nsta));
+                let ham=if ind_R[[dir]]<0{
+                    ind_R*=-1;
+                    let h0=self.ham.slice(s![i0,..,..]).map(|x| x.conj()).t().to_owned();
+                    if exist_r{
+                        rmatrix=self.rmatrix.slice(s![i0,..,..,..]).map(|x| x.conj());
+                        rmatrix.swap_axes(1,2);
+                    }
+                    h0
+                }else{
+                    if exist_r{
+                        rmatrix=self.rmatrix.slice(s![i0,..,..,..]).to_owned();
+                    }
+                    self.ham.slice(s![i0,..,..]).to_owned()
+                };
+                let ind:usize=(ind_R[[dir]]+(n as isize)) as usize;
+                ind_R[[dir]]=0;
+                if ind<num{
+                    //开始构建哈密顿量
+                    let R_exist=find_R(&new_hamR,&ind_R);
+                    let negative_R=-ind_R.clone();
+                    let negative_R_exist=find_R(&new_hamR,&negative_R);
+                    let mut use_ham=Array2::<Complex<f64>>::zeros((new_nsta,new_nsta));
+                    if self.spin{ //如果体系包含自旋, 那需要将其重新排序, 自旋上和下分开
+                        for i in 0..self.norb{
+                            for j in 0..self.norb{
+                                use_ham[[i+n*self.norb,j+ind*self.norb]]=ham[[i,j]];
+                                use_ham[[i+n*self.norb+new_norb,j+ind*self.norb]]=ham[[i+self.norb,j]];
+                                use_ham[[i+n*self.norb,j+ind*self.norb+new_norb]]=ham[[i,j+self.norb]];
+                                use_ham[[i+n*self.norb+new_norb,j+ind*self.norb+new_norb]]=ham[[i+self.norb,j+self.norb]];
+                            }
+                        }
+                        if R_exist{
+                            let index=index_R(&self.hamR,&ind_R);
+                            if index==0 && ind !=0{
+                                for i in 0..self.norb{
+                                    for j in 0..self.norb{
+                                       use_ham[[j+ind*self.norb,i+n*self.norb]]=ham[[i,j]].conj();
+                                       use_ham[[j+ind*self.norb,i+n*self.norb+new_norb]]=ham[[i+self.norb,j]].conj();
+                                       use_ham[[j+ind*self.norb+new_norb,i+n*self.norb]]=ham[[i,j+self.norb]].conj();
+                                       use_ham[[j+ind*self.norb+new_norb,i+n*self.norb+new_norb]]=ham[[i+self.norb,j+self.norb]].conj();
+                                    }
+                                }
+                            }
+                        }
+                    }else{
+                        for i in 0..self.norb{
+                            for j in 0..self.norb{
+                               use_ham[[i+n*self.norb,j+ind*self.norb]]=ham[[i,j]];
+                            }
+                        }
+                        if R_exist{
+                            let index=index_R(&self.hamR,&ind_R);
+                            if index==0 && ind !=0{
+                                for i in 0..self.norb{
+                                    for j in 0..self.norb{
+                                       use_ham[[j+ind*self.norb,i+n*self.norb]]=ham[[i,j]].conj();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    //开始对 r_matrix 进行操作
+                    let mut use_rmatrix=Array3::<Complex<f64>>::zeros((self.dim_r,new_nsta,new_nsta));
+                    if exist_r{
+                        if self.spin{ //如果体系包含自旋, 那需要将其重新排序, 自旋上和下分开
+                            for i in 0..self.norb{
+                                for j in 0..self.norb{
+                                    for r in 0..self.dim_r{
+                                        use_rmatrix[[r,i+n*self.norb,j+ind*self.norb]]=rmatrix[[r,i,j]];
+                                        use_rmatrix[[r,i+n*self.norb+new_norb,j+ind*self.norb]]=rmatrix[[r,i+self.norb,j]];
+                                        use_rmatrix[[r,i+n*self.norb,j+ind*self.norb+new_norb]]=rmatrix[[r,i,j+self.norb]];
+                                        use_rmatrix[[r,i+n*self.norb+new_norb,j+ind*self.norb+new_norb]]=rmatrix[[r,i+self.norb,j+self.norb]];
+                                    }
+                                }
+                            }
+                            if R_exist{
+                                let index=index_R(&self.hamR,&ind_R);
+                                if index==0 && ind !=0{
+                                    for i in 0..self.norb{
+                                        for j in 0..self.norb{
+                                            for r in 0..self.dim_r{
+                                               use_rmatrix[[r,j+ind*self.norb,i+n*self.norb]]=rmatrix[[r,i,j]].conj();
+                                               use_rmatrix[[r,j+ind*self.norb,i+n*self.norb+new_norb]]=rmatrix[[r,i+self.norb,j]].conj();
+                                               use_rmatrix[[r,j+ind*self.norb+new_norb,i+n*self.norb]]=rmatrix[[r,i,j+self.norb]].conj();
+                                               use_rmatrix[[r,j+ind*self.norb+new_norb,i+n*self.norb+new_norb]]=rmatrix[[r,i+self.norb,j+self.norb]].conj();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }else{
+                            for i in 0..self.norb{
+                                for j in 0..self.norb{
+                                    for r in 0..self.dim_r{
+                                       use_rmatrix[[r,i+n*self.norb,j+ind*self.norb]]=rmatrix[[r,i,j]];
+                                    }
+                                }
+                            }
+                            if R_exist{
+                                let index=index_R(&self.hamR,&ind_R);
+                                if index==0 && ind !=0{
+                                    for i in 0..self.norb{
+                                        for j in 0..self.norb{
+                                            for r in 0..self.dim_r{
+                                               use_rmatrix[[r,j+ind*self.norb,i+n*self.norb]]=rmatrix[[r,i,j]].conj();
+                                           }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if R_exist{
+                        let index=index_R(&new_hamR,&ind_R);
+                        let addham=new_ham.slice(s![index,..,..]).to_owned();
+                        new_ham.slice_mut(s![index,..,..]).assign(&(addham+use_ham));
+                        let addr=new_rmatrix.slice(s![index,..,..,..]).to_owned();
+                        new_rmatrix.slice_mut(s![index,..,..,..]).assign(&(addr+use_rmatrix));
+                    }else if negative_R_exist{
+                        let index=index_R(&new_hamR,&negative_R);
+                        let addham=new_ham.slice(s![index,..,..]).to_owned();
+                        new_ham.slice_mut(s![index,..,..]).assign(&(addham+use_ham.t().map(|x| x.conj())));
+                        let mut addr=new_rmatrix.slice(s![index,..,..,..]).to_owned();
+                        use_rmatrix.swap_axes(1,2);
+                        new_rmatrix.slice_mut(s![index,..,..,..]).assign(&(addr+use_rmatrix.map(|x| x.conj())));
+                    }else{
+                        new_ham.push(Axis(0),use_ham.view());
+                        new_hamR.push(Axis(0),ind_R.view());
+                        new_rmatrix.push(Axis(0),use_rmatrix.view());
+                    }
+                }else{
+                    continue
+                }
+            }
+        }
+        let mut model=Model{
+            dim_r:self.dim_r,
+            norb:new_norb,
+            nsta:new_nsta,
+            natom:new_natom,
+            spin:self.spin,
+            lat:new_lat,
+            orb:new_orb,
+            atom:new_atom,
+            atom_list:new_atom_list,
+            ham:new_ham,
+            hamR:new_hamR,
+            rmatrix:new_rmatrix,
+        };
+        model
     }
-    */
     #[allow(non_snake_case)]
     pub fn dos(&self,k_mesh:&Array1::<usize>,E_min:f64,E_max:f64,E_n:usize,sigma:f64)->(Array1::<f64>,Array1::<f64>){
         let kvec:Array2::<f64>=gen_kmesh(&k_mesh);
@@ -1137,6 +1129,62 @@ impl Model{
         }
         dos=dos/(nk as f64);
         (E0,dos)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn berry_curvature_n_onek(&self,k_vec:&Array1::<f64>,dir_1:&Array1::<f64>,dir_2:&Array1::<f64>,og:f64,spin:usize,eta:f64)->Array1::<f64>{
+        let li:Complex<f64>=1.0*Complex::i();
+        let (band,evec)=self.solve_onek(&k_vec);
+        let mut v:Array3::<Complex<f64>>=self.gen_v(k_vec);
+        let mut J:Array3::<Complex<f64>>=v.clone();
+        if self.spin {
+            let mut X:Array2::<Complex<f64>>=Array2::eye(self.nsta);
+            let pauli:Array2::<Complex<f64>>= match spin{
+                0=> arr2(&[[1.0+0.0*li,0.0+0.0*li],[0.0+0.0*li,1.0+0.0*li]]),
+                1=> arr2(&[[0.0+0.0*li,1.0+0.0*li],[1.0+0.0*li,0.0+0.0*li]])/2.0,
+                2=> arr2(&[[0.0+0.0*li,0.0-1.0*li],[0.0+1.0*li,0.0+0.0*li]])/2.0,
+                3=> arr2(&[[1.0+0.0*li,0.0+0.0*li],[0.0+0.0*li,-1.0+0.0*li]])/2.0,
+                _=>panic!("Wrong, spin should be 0, 1, 2, 3, but you input {}",spin),
+            };
+            X=kron(&pauli,&Array2::eye(self.norb));
+            for i in 0..self.dim_r{
+                let j=J.slice(s![i,..,..]).to_owned().clone();
+                let j=anti_comm(&X,&j)/2.0; //这里做反对易
+                J.slice_mut(s![i,..,..]).assign(&(j*dir_1[[i]]));
+                let v0=v.slice(s![i,..,..]).to_owned().clone();
+                v.slice_mut(s![i,..,..]).assign(&(v0*dir_2[[i]]));
+            }
+        }else{ 
+            if spin !=0{
+                println!("Warning, the model haven't got spin, so the spin input will be ignord");
+            }
+            for i in 0..self.dim_r{
+                let j=J.slice(s![i,..,..]).to_owned().clone();
+                J.slice_mut(s![i,..,..]).assign(&(j*dir_1[[i]]));
+                let v0=v.slice(s![i,..,..]).to_owned().clone();
+                v.slice_mut(s![i,..,..]).assign(&(v0*dir_2[[i]]));
+            }
+        };
+
+        let J:Array2::<Complex<f64>>=J.sum_axis(Axis(0));
+        let v:Array2::<Complex<f64>>=v.sum_axis(Axis(0));
+        let evec_conj:Array2::<Complex<f64>>=evec.clone().map(|x| x.conj()).to_owned();
+        let A1=J.dot(&evec.clone().reversed_axes());
+        let A1=evec_conj.clone().dot(&A1);
+        let A2=v.dot(&evec.reversed_axes());
+        let A2=evec_conj.dot(&A2);
+        let mut U0=Array2::<Complex<f64>>::zeros((self.nsta,self.nsta));
+        for i in 0..self.nsta{
+            for j in 0..self.nsta{
+                if i != j{
+                    U0[[i,j]]=1.0/((band[[i]]-band[[j]]).powi(2)-(og+li*eta).powi(2));
+                }else{
+                    U0[[i,j]]=Complex::new(0.0,0.0);
+                }
+            }
+        }
+        let omega_n:Array1::<f64>=(-Complex::new(2.0,0.0)*(A1*U0).dot(&A2)).diag().map(|x| x.im).to_owned();
+        omega_n
     }
 
     #[allow(non_snake_case)]
@@ -1204,7 +1252,7 @@ impl Model{
         }
         omega
     }
-    //这个是用来并行计算大量k点的贝利曲率
+    ///这个是用来并行计算大量k点的贝利曲率
     #[allow(non_snake_case)]
     pub fn berry_curvature(&self,k_vec:&Array2::<f64>,dir_1:&Array1::<f64>,dir_2:&Array1::<f64>,T:f64,og:f64,mu:f64,spin:usize,eta:f64)->Array1::<f64>{
         if dir_1.len() !=self.dim_r || dir_2.len() != self.dim_r{
@@ -1218,6 +1266,7 @@ impl Model{
         let omega=arr1(&omega);
         omega
     }
+    ///这个是用来计算霍尔电导的.
     #[allow(non_snake_case)]
     pub fn Hall_conductivity(&self,k_mesh:&Array1::<usize>,dir_1:&Array1::<f64>,dir_2:&Array1::<f64>,T:f64,og:f64,mu:f64,spin:usize,eta:f64)->f64{
         let kvec:Array2::<f64>=gen_kmesh(&k_mesh);
@@ -1236,6 +1285,41 @@ impl Model{
         let omega:Vec<f64>=k_range.axis_iter(Axis(0)).into_par_iter().map(|x| { inte(x.to_owned())}).collect();
         let omega:Array1::<f64>=arr1(&omega);
         let conductivity:f64=omega.sum()*(2.0*PI).powi(self.dim_r as i32)/self.lat.det().unwrap();
+        conductivity
+    }
+    ///用来计算多个mu值的, 这种直接求出所有的omega_n, 然后再分别用mu做求和速度更快, 避免了重复求解.
+    pub fn Hall_conductivity_mu(&self,k_mesh:&Array1::<usize>,dir_1:&Array1::<f64>,dir_2:&Array1::<f64>,T:f64,og:f64,mu:Array1::<f64>,spin:usize,eta:f64)->Array1::<f64>{
+        let kvec:Array2::<f64>=gen_kmesh(&k_mesh);
+        let nk:usize=kvec.len_of(Axis(0));
+        let omega_n:Vec<_>=kvec.axis_iter(Axis(0)).into_par_iter().map(|x| {
+            let omega_n=self.berry_curvature_n_onek(&x.to_owned(),&dir_1,&dir_2,og,spin,eta); 
+            omega_n
+            }).collect();
+        let omega_n=Array2::<f64>::from_shape_vec((nk, self.nsta),omega_n.into_iter().flatten().collect()).unwrap();
+        let n_mu:usize=mu.len();
+        let mut conductivity=Array1::zeros(n_mu);
+        let band=self.solve_band_all_parallel(&kvec);
+        if T==0.0{
+            for s in 0..n_mu{
+                let mut omega=Array1::<f64>::zeros(nk);
+                for k in 0..nk{
+                    for i in 0..self.nsta{
+                        omega[[k]]+= if band[[k,i]]> mu[[s]] {0.0} else {omega_n[[k,i]]};
+                    }
+                }
+                conductivity[[s]]=omega.sum()*(2.0*PI).powi(self.dim_r as i32)/self.lat.det().unwrap();
+            }
+        }else{
+            let beta=1.0/(T*8.617e-5);
+            for s in 0..n_mu{
+                let fermi_dirac=band.map(|x| 1.0/((beta*(x-mu[[s]])).exp()+1.0));
+                let mut omega=Array1::<f64>::zeros(nk);
+                for i in 0..nk{
+                    omega[[i]]=(omega_n.row(i).to_owned()*fermi_dirac.row(i).to_owned()).sum();
+                }
+                conductivity[[s]]=omega.sum()*(2.0*PI).powi(self.dim_r as i32)/self.lat.det().unwrap();
+            }
+        }
         conductivity
     }
     #[allow(non_snake_case)]
@@ -1561,7 +1645,6 @@ impl Model{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nalgebra::Complex;
     use ndarray::prelude::*;
     use ndarray::*;
     use std::time::{Duration, Instant};
@@ -1576,7 +1659,7 @@ mod tests {
     fn Haldan_model(){
         let li:Complex<f64>=1.0*Complex::i();
         let t=-1.0+0.0*li;
-        let t2=0.0+0.0*li;
+        let t2=-1.0+0.0*li;
         let delta=0.7;
         let dim_r:usize=2;
         let norb:usize=2;
@@ -1627,7 +1710,7 @@ mod tests {
         let nk:usize=11;
         let kmesh=arr1(&[nk,nk]);
         let start = Instant::now();   // 开始计时
-        let conductivity=model.Hall_conductivity_adapted(&kmesh,&dir_1,&dir_2,T,og,mu,spin,eta,1e-2,1e-2);
+        let conductivity=model.Hall_conductivity(&kmesh,&dir_1,&dir_2,T,og,mu,spin,eta);
         let end = Instant::now();    // 结束计时
         let duration = end.duration_since(start); // 计算执行时间
         println!("{}",conductivity/(2.0*PI));
@@ -1666,7 +1749,7 @@ mod tests {
         let label=vec!["G","K","M","G"];
         model.show_band(&path,&label,nk,"tests/graphene");
         /////开始计算体系的霍尔电导率//////
-        let nk:usize=101;
+        let nk:usize=11;
         let T:f64=0.0;
         let eta:f64=0.001;
         let og:f64=0.0;
@@ -1678,6 +1761,21 @@ mod tests {
         let (eval,evec)=model.solve_onek(&arr1(&[0.3,0.5]));
         let conductivity=model.Hall_conductivity(&kmesh,&dir_1,&dir_2,T,og,mu,spin,eta);
         println!("{}",conductivity/(2.0*PI));
+        //开始计算边缘态, 首先是zigsag态
+        let nk:usize=101;
+        let zig_model=model.cut_piece(51,0);
+        let path=[[0.0,0.0],[0.0,0.5],[0.0,1.0]];
+        let path=arr2(&path);
+        let (k_vec,k_dist,k_node)=zig_model.k_path(&path,nk);
+        let (eval,evec)=zig_model.solve_all_parallel(&k_vec);
+        let label=vec!["G","M","G"];
+        /*
+        println!("{}",model.ham);
+        println!("{}",model.hamR);
+        println!("{}",zig_model.ham);
+        println!("{}",zig_model.hamR);
+        */
+        zig_model.show_band(&path,&label,nk,"tests/graphene");
     }
 
     #[test]
@@ -1686,7 +1784,7 @@ mod tests {
         let delta=0.7;
         let t=-1.0+0.0*li;
         let rashba=0.0+0.0*li;
-        let soc=-0.24+0.0*li;
+        let soc=-1.0+0.0*li;
         let dim_r:usize=2;
         let norb:usize=2;
         let lat=arr2(&[[1.0,0.0],[0.5,3.0_f64.sqrt()/2.0]]);
@@ -1742,14 +1840,13 @@ mod tests {
         println!("{}",conductivity/(2.0*PI));
         println!("function_a took {} seconds", duration.as_secs_f64());   // 输出执行时间
 
-        let nk:usize=41;
+        let nk:usize=11;
         let kmesh=arr1(&[nk,nk]);
         let start = Instant::now();   // 开始计时
-        let conductivity=model.Hall_conductivity_adapted(&kmesh,&dir_1,&dir_2,T,og,mu,spin,eta,1e-4,1e-4);
+        let conductivity=model.Hall_conductivity(&kmesh,&dir_1,&dir_2,T,og,mu,spin,eta);
         let end = Instant::now();    // 结束计时
         let duration = end.duration_since(start); // 计算执行时间
         println!("{}",conductivity/(2.0*PI));
         println!("function_a took {} seconds", duration.as_secs_f64());   // 输出执行时间
     }
 }
-
