@@ -185,14 +185,6 @@ pub fn anti_comm(A:&Array2::<Complex<f64>>,B:&Array2::<Complex<f64>>)->Array2::<
     let C=A0.dot(&B0)+B0.dot(&A0);
     C
 }
-#[allow(non_snake_case)]
-pub fn cal_V(k_point:&Array2::<f64>)->f64{
-    let mut S:Array2::<f64>=k_point.clone();
-    let n=S.len_of(Axis(0));
-    S.push(Axis(1),Array1::ones(n).view());
-    let S:f64=S.det().expect("Wrong, S'det is 0").abs();
-    S
-}
 
 pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::<f64>,re_err:f64,ab_err:f64)->f64{
     ///对于任意维度的积分 n, 我们的将区域刨分成 n+1面体的小块, 然后用线性插值来近似这个n+1的积分结果
@@ -895,10 +887,13 @@ impl Model{
     #[allow(non_snake_case)]
     pub fn solve_all_parallel(&self,kvec:&Array2::<f64>)->(Array2::<f64>,Array3::<Complex<f64>>){
         let nk=kvec.len_of(Axis(0));
-        let (eval,evec):(Vec<_>,Vec<_>)=kvec.axis_iter(Axis(0)).into_par_iter().map(|x| {
-            let (eval, evec) =self.solve_onek(&x.to_owned()); 
-            (eval.to_vec(),evec.into_raw_vec())
-            }).collect();
+        let (eval,evec):(Vec<_>,Vec<_>)=kvec
+            .axis_iter(Axis(0))
+            .into_par_iter()
+            .map(|x| {
+                let (eval, evec) =self.solve_onek(&x.to_owned()); 
+                (eval.to_vec(),evec.into_raw_vec())
+                }).collect();
         let band = Array2::from_shape_vec((nk, self.nsta), eval.into_iter().flatten().collect()).unwrap();
         let vectors=Array3::from_shape_vec((nk, self.nsta,self.nsta), evec.into_iter().flatten().collect()).unwrap();
         (band,vectors)
@@ -1106,6 +1101,147 @@ impl Model{
             rmatrix:new_rmatrix,
         };
         model
+    }
+
+    ///这个函数是用来对模型做变换的, 变换前后模型的基矢 L'=UL.
+    pub fn make_supercell(&self,U:&Array2::<f64>)->Model{
+        if self.dim_r!=U.len_of(Axis(0)){
+            panic!("Wrong, the imput U's dimension must equal to self.dim_r")
+        }
+        let new_lat=U.dot(&self.lat);
+        let U_det=U.det();
+        let U_inv=U.inv();
+        //开始判断是否存在小数
+        for i in U.len_of(Axis(0)){
+            for j in U.len_of(Axis(0)){
+                if U[[i,j]].frac()> 1e-8{
+                    panic!("Wrong, the U's element must be integer, but your given is {} at [{},{}]",U[[i,j]],i,j);
+                }
+            }
+        }
+
+        //开始构建新的轨道位置和原子位置
+        let mut use_orb=self.orb.dot(&U_inv);
+        let mut use_atom=self.atom.dot(&U_inv);
+        let mut orb_list:Vec<usize>=Vec::new();
+        let mut orb_list_R=Array2::<isize>::zeros((0,self.dim_r));
+        let mut atom_list:Vec<usize>=Vec::new();
+        let mut new_orb=Array1::<f64>::zeros((0,self.dim_r));
+        let mut new_atom=Array1::<f64>::zeros((0,self.dim_r));
+        let mut use_atom_list:Vec<usize>=Vec::new();
+        let mut a=0
+        for i in 0..self.natom{
+            use_orb_list.push(a);
+            a+=self.atom_list[i];
+        }
+        if self.dir==3{
+            for i in -(u_det as usize)..(u_det as usize){
+                for j in -(u_det as usize)..(u_det as usize){
+                    for k in -(u_det as usize)..(u_det as usize){
+                        for n in 0..self.natom{
+                            let mut atoms=use_atom.row(n).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned()+k*U_inv.row(2).to_owned(); //原子的位置在新的坐标系下的坐标
+                            if use_atom.iter().all(|x| x>0.0 && x < 1.0){ //判断是否在原胞内
+                                new_atom.push_row(&atoms); 
+                                atom_list.push(self.atom_list[n]);
+                                for n0 in use_atom_list[n]..use_atom_list[n]+self.atom_list[n]{
+                                    //开始根据原子位置开始生成轨道
+                                    let mut orbs=use_orb.row(n0).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned()+k*U_inv.row(2).to_owned(); //新的轨道的坐标
+                                    new_orb.push_row(&orbs);
+                                    orb_list.push(n0);
+                                    orb_list_R.push_row(&arr1(&[i,j,k]));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }else if dir==2{
+            for i in -(u_det as usize)..(u_det as usize){
+                for j in -(u_det as usize)..(u_det as usize){
+                    for n in 0..self.natom{
+                        let mut atoms=use_atom.row(n).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned()+k*U_inv.row(2).to_owned(); //原子的位置在新的坐标系下的坐标
+                        if use_atom.iter().all(|x| x>0.0 && x < 1.0){ //判断是否在原胞内
+                            new_atom.push_row(&atoms); 
+                            atom_list.push(self.atom_list[n]);
+                            for n0 in use_atom_list[n]..use_atom_list[n]+self.atom_list[n]{
+                                //开始根据原子位置开始生成轨道
+                                let mut orbs=use_orb.row(n0).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned(); //新的轨道的坐标
+                                new_orb.push_row(&orbs);
+                                orb_list.push(n0);
+                                orb_list_R.push_row(&arr1(&[i,j]));
+                            }
+                        }
+                    }
+                }
+            }
+        }else if dir==1{
+            for i in -(u_det as usize)..(u_det as usize){
+                for n in 0..self.natom{
+                    let mut atoms=use_atom.row(n).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned()+k*U_inv.row(2).to_owned(); //原子的位置在新的坐标系下的坐标
+                    if use_atom.iter().all(|x| x>0.0 && x < 1.0){ //判断是否在原胞内
+                        new_atom.push_row(&atoms); 
+                        atom_list.push(self.atom_list[n]);
+                        for n0 in use_atom_list[n]..use_atom_list[n]+self.atom_list[n]{
+                            //开始根据原子位置开始生成轨道
+                            let mut orbs=use_orb.row(n0).to_owned()+i*U_inv.row(0).to_owned() //新的轨道的坐标
+                            new_orb.push_row(&orbs);
+                            orb_list.push(n0);
+                            orb_list_R.push_row(&arr1(&[i]));
+                        }
+                    }
+                }
+            }
+        }
+        //轨道位置和原子位置构建完成, 接下来我们开始构建哈密顿量
+        let norb=orb_list.len_of(Axis(0));
+        let mut nsta=norb;
+        if self.spin{
+            nsta*=2;
+        }
+        let n_R=self.hamR.len_of(Axis(0));
+        let mut new_hamR=Array2::<isize>::zeros((1,self.dim_r));
+        let mut use_hamR=Array2::<isize>::zeros((1,self.dim_r));
+        let mut new_ham=Array3::<Complex<f64>>::zeros((1,nsta,nsta));
+        let mut new_rmatrix=Array4::<Complex<f64>>::zeros((1,self.dim_r,nsta,nsta));
+        let mut max_R=Array1::<isize>::zeros((1,self.dim_r));
+        for (j,cow) in self.hamR.axis_iter(Axis(1)).enumerate(){
+            let abs_cow=cow.map(|x| x.abs());
+            max_R[[j]]=abs_cow.to_vec().iter().max().unwrap();
+        }
+        //用来产生可能的hamR
+
+        match self.dim_r{
+            1=>{
+
+            }
+            2=>{
+            }
+            3=>{
+                for i in -max_R[[0]]..max_R[[0]]{
+                    for j in -max_R[[1]]..max_R[[1]]{
+                        for k in 1..max_R[[2]]{
+                            if k==0{
+                                use_hamR.push
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if self.spin{
+        }else{
+            for i in 0..norb{
+                for j in 0..norb{
+                    for R in 0..use_n_R{
+                        int_i:usize=i; //超胞中的 <i|
+                        use_i:usize=orb_list[i]; //对应到原胞中的 <i|
+                        int_j:usize=i; //超胞中的 <i|
+                        use_j:usize=orb_list[j]; //超胞中的 |j>
+                    }
+                }
+            }
+        }
     }
     #[allow(non_snake_case)]
     pub fn dos(&self,k_mesh:&Array1::<usize>,E_min:f64,E_max:f64,E_n:usize,sigma:f64)->(Array1::<f64>,Array1::<f64>){

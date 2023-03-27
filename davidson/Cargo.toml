@@ -1,5 +1,5 @@
 [package]
-name = "integrate"
+name = "davidson"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,11 +9,7 @@ lto = "fat"
 codegen-units = 1
 
 [dependencies]
-num="*"
 ndarray={ version="*", features = ["rayon"] }
-nalgebra="*"
 num-complex="*"
 ndarray-linalg={version="*",features=["intel-mkl"]}
-gnuplot="*"
 rayon="*"
-partial_application="*"

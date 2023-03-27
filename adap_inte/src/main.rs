@@ -15,20 +15,23 @@ use std::time::{Duration, Instant};
 fn main() {
     //let k_range=arr2(&[[0.0,1.0],[0.0,1.0]]);
     let k_range=arr2(&[[0.0,1.0],[0.0,1.0],[0.0,1.0]]);
-    let re_err=5e-2;
-    let ab_err=5e-2;
+    let re_err=5e-3;
+    let ab_err=5e-3;
+    /*
     let start = Instant::now();   // 开始计时
     let a:f64=adapted_integrate(&test_func,&k_range,re_err,ab_err);
     let end = Instant::now();    // 结束计时
     let duration = end.duration_since(start); // 计算执行时间
     println!("function_a took {} seconds", duration.as_secs_f64());   // 输出执行时间
     println!("{}",a);
+
     let start = Instant::now();   // 开始计时
     let a:f64=adapted_integrate_loop(&test_func,&k_range,re_err,ab_err);
     let end = Instant::now();    // 结束计时
     let duration = end.duration_since(start); // 计算执行时间
     println!("function_b took {} seconds", duration.as_secs_f64());   // 输出执行时间
     println!("{}",a);
+    */
     let start = Instant::now();   // 开始计时
     let a:f64=adapted_integrate_quick(&test_func,&k_range,re_err,ab_err);
     let end = Instant::now();    // 结束计时
@@ -480,9 +483,10 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
             let s3=f0(&kvec.row(2).to_owned());
             let mut use_kvec=vec![(kvec.clone(),re_err,ab_err,s1,s2,s3)];
             while let Some((kvec,re_err,ab_err,s1,s2,s3))=use_kvec.pop() {
-                let mut S=kvec.clone();
-                S.push(Axis(1),Array1::ones(3).view());
-                let S:f64=S.det().expect("Wrong, S'det is 0").abs();//先求一下体积
+                //let mut S=kvec.clone();
+                //S.push(Axis(1),Array1::ones(3).view());
+                //let S:f64=S.det().expect("Wrong, S'det is 0").abs();//先求一下体积
+                let S:f64=((kvec[[1,0]]*kvec[[2,1]]-kvec[[2,0]]*kvec[[1,1]])-(kvec[[0,0]]*kvec[[2,1]]-kvec[[0,1]]*kvec[[2,0]])+(kvec[[0,0]]*kvec[[1,1]]-kvec[[1,0]]*kvec[[0,1]])).abs();
                 let kvec_m=kvec.mean_axis(Axis(0)).unwrap();
                 let sm:f64=f0(&kvec_m.to_owned());
 
@@ -519,33 +523,20 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
         return all_1+all_2;
     }else if dim==3{
     //对于三位情况, 需要用到四面体, 所以需要先将6面体变成6个四面体
-        fn cal_integrate_3D(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>)->f64{
-            //这个是用来进行线性插值积分的结果, 给出三个点和函数, 计算得到对应的插值积分结果
-            let mut S=kvec.clone();
-            S.push(Axis(1),Array1::ones(4).view());
-            let S:f64=S.det().expect("Wrong, S'det is 0").abs();
-            let mut all:f64=0.0;
-            for i in 0..kvec.len_of(Axis(0)){
-                all+=f0(&kvec.row(i).to_owned())
+        fn adapt_integrate_tetrahedron(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>,re_err:f64,ab_err:f64,S:f64)->f64{
+        /*
+            fn det3(a:&Array1::<f64>,b:&Array1::<f64>,c:&Array1::<f64>)->f64{
+                return -a[[2]]*b[[1]]*c[[0]]+a[[1]]*b[[2]]*c[[0]]+a[[2]]*b[[0]]*c[[1]]-a[[0]]*b[[2]]*c[[1]]-a[[1]]*b[[0]]*c[[2]]+a[[0]]*b[[1]]*c[[2]];
             }
-            all*=S;
-            all=all/24.0;
-            all
-        }
-        fn adapt_integrate_tetrahedron(f0:&dyn Fn(&Array1::<f64>)->f64,kvec:&Array2::<f64>,re_err:f64,ab_err:f64)->f64{
+            */
             //这个函数是用来进行自适应算法的
             let mut result=0.0;
             let s1=f0(&kvec.row(0).to_owned());
             let s2=f0(&kvec.row(1).to_owned());
             let s3=f0(&kvec.row(2).to_owned());
             let s4=f0(&kvec.row(3).to_owned());
-            let mut use_kvec=vec![(kvec.clone(),re_err,ab_err,s1,s2,s3,s4)];
-            while let Some((kvec,re_err,ab_err,s1,s2,s3,s4))=use_kvec.pop() {
-                let mut S=kvec.clone();
-                S.push(Axis(1),Array1::ones(4).view());
-                let S:f64=S.det().expect("Wrong, S'det is 0").abs();//先求一下体积
-
-                let all=cal_integrate_3D(f0,&kvec);
+            let mut use_kvec=vec![(kvec.clone(),re_err,ab_err,s1,s2,s3,s4,S)];
+            while let Some((kvec,re_err,ab_err,s1,s2,s3,s4,S))=use_kvec.pop() {
                 let kvec_m=kvec.mean_axis(Axis(0)).unwrap();
                 let sm=f0(&kvec_m.to_owned());
                 /////////////////////////
@@ -576,11 +567,12 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
                 let all=(s1+s2+s3+s4)*S/24.0;
                 let all_new=all/4.0*3.0+sm*S/24.0;
                 let abs_err= if ab_err>all*re_err{ab_err} else {re_err};
+                let S0=S/4.0;
                 if (all_new-all).abs()> abs_err && S > 1e-9{
-                    use_kvec.push((kvec_1.clone(),re_err*0.25,ab_err*0.25,s1,s2,s3,sm));
-                    use_kvec.push((kvec_2.clone(),re_err*0.25,ab_err*0.25,s1,s2,sm,s4));
-                    use_kvec.push((kvec_3.clone(),re_err*0.25,ab_err*0.25,s1,sm,s3,s4));
-                    use_kvec.push((kvec_4.clone(),re_err*0.25,ab_err*0.25,sm,s2,s3,s4));
+                    use_kvec.push((kvec_1.clone(),re_err*0.25,ab_err*0.25,s1,s2,s3,sm,S0));
+                    use_kvec.push((kvec_2.clone(),re_err*0.25,ab_err*0.25,s1,s2,sm,s4,S0));
+                    use_kvec.push((kvec_3.clone(),re_err*0.25,ab_err*0.25,s1,sm,s3,s4,S0));
+                    use_kvec.push((kvec_4.clone(),re_err*0.25,ab_err*0.25,sm,s2,s3,s4,S0));
                 }else{
                     result+=all_new;
                 }
@@ -607,11 +599,12 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
                                         [k_range.row(0)[1],k_range.row(1)[1],k_range.row(2)[1]],
                                         [k_range.row(0)[0],k_range.row(1)[1],k_range.row(2)[0]],
                                         [k_range.row(0)[1],k_range.row(1)[0],k_range.row(2)[0]]]);//第一个四面体
-        let all_1=adapt_integrate_tetrahedron(f0,&area_1,re_err/5.0,ab_err/5.0);
-        let all_2=adapt_integrate_tetrahedron(f0,&area_2,re_err/5.0,ab_err/5.0);
-        let all_3=adapt_integrate_tetrahedron(f0,&area_3,re_err/5.0,ab_err/5.0);
-        let all_4=adapt_integrate_tetrahedron(f0,&area_4,re_err/5.0,ab_err/5.0);
-        let all_5=adapt_integrate_tetrahedron(f0,&area_5,re_err/5.0,ab_err/5.0);
+        let V=(k_range[[0,1]]-k_range[[0,0]])*(k_range[[1,1]]-k_range[[1,0]])*(k_range[[2,1]]-k_range[[2,0]]);
+        let all_1=adapt_integrate_tetrahedron(f0,&area_1,re_err,ab_err/6.0,V);
+        let all_2=adapt_integrate_tetrahedron(f0,&area_2,re_err,ab_err/6.0,V);
+        let all_3=adapt_integrate_tetrahedron(f0,&area_3,re_err,ab_err/6.0,V);
+        let all_4=adapt_integrate_tetrahedron(f0,&area_4,re_err,ab_err/6.0,V);
+        let all_5=adapt_integrate_tetrahedron(f0,&area_5,re_err,ab_err/3.0,V*2.0);
         return all_1+all_2+all_3+all_4+all_5
     }else{
         panic!("wrong, the row_dim if k_range must be 1,2 or 3, but you's give {}",dim);
@@ -620,7 +613,7 @@ pub fn adapted_integrate_quick(f0:&dyn Fn(&Array1::<f64>)->f64,k_range:&Array2::
 
 fn test_func(k:&Array1::<f64>)->f64{
     let k0=k.clone();
-    k0.dot(&k0)//.powi(5).sqrt().sin()
-    //k0.sum().powi(2)
+    //k0.dot(&k0)//.powi(5).sqrt().sin()
+    k0.sum().powi(2)
     //k0.sum()
 }
