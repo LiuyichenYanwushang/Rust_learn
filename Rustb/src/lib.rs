@@ -1104,17 +1104,23 @@ impl Model{
     }
 
     ///这个函数是用来对模型做变换的, 变换前后模型的基矢 L'=UL.
+    ///uncheck
     pub fn make_supercell(&self,U:&Array2::<f64>)->Model{
         if self.dim_r!=U.len_of(Axis(0)){
             panic!("Wrong, the imput U's dimension must equal to self.dim_r")
         }
         let new_lat=U.dot(&self.lat);
-        let U_det=U.det();
-        let U_inv=U.inv();
+        let U_det=U.det().unwrap() as isize;
+        if U_det <0{
+            panic!("Wrong, the U_det is {}, you should using right hand axis",U_det);
+        }else if U_det==0{
+            panic!("Wrong, the U_det is {}",U_det);
+        }
+        let U_inv=U.inv().unwrap();
         //开始判断是否存在小数
-        for i in U.len_of(Axis(0)){
-            for j in U.len_of(Axis(0)){
-                if U[[i,j]].frac()> 1e-8{
+        for i in 0..U.len_of(Axis(0)){
+            for j in 0..U.len_of(Axis(1)){
+                if U[[i,j]].fract()> 1e-8{
                     panic!("Wrong, the U's element must be integer, but your given is {} at [{},{}]",U[[i,j]],i,j);
                 }
             }
@@ -1124,124 +1130,249 @@ impl Model{
         let mut use_orb=self.orb.dot(&U_inv);
         let mut use_atom=self.atom.dot(&U_inv);
         let mut orb_list:Vec<usize>=Vec::new();
-        let mut orb_list_R=Array2::<isize>::zeros((0,self.dim_r));
+        //let mut orb_list_R=Array2::<isize>::zeros((0,self.dim_r));
         let mut atom_list:Vec<usize>=Vec::new();
-        let mut new_orb=Array1::<f64>::zeros((0,self.dim_r));
-        let mut new_atom=Array1::<f64>::zeros((0,self.dim_r));
+        let mut new_orb=Array2::<f64>::zeros((0,self.dim_r));
+        let mut new_atom=Array2::<f64>::zeros((0,self.dim_r));
         let mut use_atom_list:Vec<usize>=Vec::new();
-        let mut a=0
+        let mut a=0;
         for i in 0..self.natom{
-            use_orb_list.push(a);
+            use_atom_list.push(a);
             a+=self.atom_list[i];
         }
-        if self.dir==3{
-            for i in -(u_det as usize)..(u_det as usize){
-                for j in -(u_det as usize)..(u_det as usize){
-                    for k in -(u_det as usize)..(u_det as usize){
+        if self.dim_r==3{
+            for i in -U_det..U_det{
+                for j in -U_det..U_det{
+                    for k in -U_det..U_det{
                         for n in 0..self.natom{
-                            let mut atoms=use_atom.row(n).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned()+k*U_inv.row(2).to_owned(); //原子的位置在新的坐标系下的坐标
-                            if use_atom.iter().all(|x| x>0.0 && x < 1.0){ //判断是否在原胞内
-                                new_atom.push_row(&atoms); 
-                                atom_list.push(self.atom_list[n]);
+                            let mut atoms=use_atom.row(n).to_owned()+(i as f64)*U_inv.row(0).to_owned()+(j as f64)*U_inv.row(1).to_owned()+(k as f64)*U_inv.row(2).to_owned(); //原子的位置在新的坐标系下的坐标
+                            if use_atom.iter().all(|x| *x>0.0 && *x < 1.0){ //判断是否在原胞内
+                                new_atom.push_row(atoms.view()); 
+                                use_atom_list.push(self.atom_list[n]);
                                 for n0 in use_atom_list[n]..use_atom_list[n]+self.atom_list[n]{
                                     //开始根据原子位置开始生成轨道
-                                    let mut orbs=use_orb.row(n0).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned()+k*U_inv.row(2).to_owned(); //新的轨道的坐标
-                                    new_orb.push_row(&orbs);
+                                    let mut orbs=use_orb.row(n0).to_owned()+(i as f64)*U_inv.row(0).to_owned()+(j as f64)*U_inv.row(1).to_owned()+(k as f64)*U_inv.row(2).to_owned(); //新的轨道的坐标
+                                    new_orb.push_row(orbs.view());
                                     orb_list.push(n0);
-                                    orb_list_R.push_row(&arr1(&[i,j,k]));
+                                    //orb_list_R.push_row(&arr1(&[i,j,k]));
                                 }
                             }
                         }
                     }
                 }
             }
-        }else if dir==2{
-            for i in -(u_det as usize)..(u_det as usize){
-                for j in -(u_det as usize)..(u_det as usize){
+        }else if self.dim_r==2{
+            for i in -U_det..U_det{
+                for j in -U_det..U_det{
                     for n in 0..self.natom{
-                        let mut atoms=use_atom.row(n).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned()+k*U_inv.row(2).to_owned(); //原子的位置在新的坐标系下的坐标
-                        if use_atom.iter().all(|x| x>0.0 && x < 1.0){ //判断是否在原胞内
-                            new_atom.push_row(&atoms); 
-                            atom_list.push(self.atom_list[n]);
+                        let mut atoms=use_atom.row(n).to_owned()+(i as f64)*U_inv.row(0).to_owned()+(j as f64)*U_inv.row(1).to_owned(); //原子的位置在新的坐标系下的坐标
+                        if use_atom.iter().all(|x| *x>0.0 && *x < 1.0){ //判断是否在原胞内
+                            new_atom.push_row(atoms.view()); 
+                            use_atom_list.push(self.atom_list[n]);
                             for n0 in use_atom_list[n]..use_atom_list[n]+self.atom_list[n]{
                                 //开始根据原子位置开始生成轨道
-                                let mut orbs=use_orb.row(n0).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned(); //新的轨道的坐标
-                                new_orb.push_row(&orbs);
+                                let mut orbs=use_orb.row(n0).to_owned()+(i as f64)*U_inv.row(0).to_owned()+(j as f64)*U_inv.row(1).to_owned(); //新的轨道的坐标
+                                new_orb.push_row(orbs.view());
                                 orb_list.push(n0);
-                                orb_list_R.push_row(&arr1(&[i,j]));
+                                //orb_list_R.push_row(&arr1(&[i,j]));
                             }
                         }
                     }
                 }
             }
-        }else if dir==1{
-            for i in -(u_det as usize)..(u_det as usize){
+        }else if self.dim_r==1{
+            for i in -U_det..U_det{
                 for n in 0..self.natom{
-                    let mut atoms=use_atom.row(n).to_owned()+i*U_inv.row(0).to_owned()+j*U_inv.row(1).to_owned()+k*U_inv.row(2).to_owned(); //原子的位置在新的坐标系下的坐标
-                    if use_atom.iter().all(|x| x>0.0 && x < 1.0){ //判断是否在原胞内
-                        new_atom.push_row(&atoms); 
-                        atom_list.push(self.atom_list[n]);
+                    let mut atoms=use_atom.row(n).to_owned()+(i as f64)*U_inv.row(0).to_owned(); //原子的位置在新的坐标系下的坐标
+                    if use_atom.iter().all(|x| *x>0.0 && *x < 1.0){ //判断是否在原胞内
+                        new_atom.push_row(atoms.view()); 
+                        use_atom_list.push(self.atom_list[n]);
                         for n0 in use_atom_list[n]..use_atom_list[n]+self.atom_list[n]{
                             //开始根据原子位置开始生成轨道
-                            let mut orbs=use_orb.row(n0).to_owned()+i*U_inv.row(0).to_owned() //新的轨道的坐标
-                            new_orb.push_row(&orbs);
+                            let mut orbs=use_orb.row(n0).to_owned()+(i as f64)*U_inv.row(0).to_owned(); //新的轨道的坐标
+                            new_orb.push_row(orbs.view());
                             orb_list.push(n0);
-                            orb_list_R.push_row(&arr1(&[i]));
+                            //orb_list_R.push_row(&arr1(&[i]));
                         }
                     }
                 }
             }
         }
         //轨道位置和原子位置构建完成, 接下来我们开始构建哈密顿量
-        let norb=orb_list.len_of(Axis(0));
+        let norb=new_orb.len_of(Axis(0));
         let mut nsta=norb;
         if self.spin{
             nsta*=2;
         }
+        let natom=new_atom.len_of(Axis(0));
         let n_R=self.hamR.len_of(Axis(0));
-        let mut new_hamR=Array2::<isize>::zeros((1,self.dim_r));
-        let mut use_hamR=Array2::<isize>::zeros((1,self.dim_r));
-        let mut new_ham=Array3::<Complex<f64>>::zeros((1,nsta,nsta));
-        let mut new_rmatrix=Array4::<Complex<f64>>::zeros((1,self.dim_r,nsta,nsta));
-        let mut max_R=Array1::<isize>::zeros((1,self.dim_r));
+        let mut new_hamR=Array2::<isize>::zeros((1,self.dim_r));//超胞准备用的hamR
+        let mut use_hamR=Array2::<isize>::zeros((1,self.dim_r));//超胞的hamR的可能, 如果这个hamR没有对应的hopping就会被删除
+        let mut new_ham=Array3::<Complex<f64>>::zeros((1,nsta,nsta));//超薄准备用的ham
+        let mut new_rmatrix=Array4::<Complex<f64>>::zeros((1,self.dim_r,nsta,nsta));//超薄准备用的rmatrix
+        let mut max_R=Array1::<isize>::zeros(self.dim_r);
         for (j,cow) in self.hamR.axis_iter(Axis(1)).enumerate(){
             let abs_cow=cow.map(|x| x.abs());
-            max_R[[j]]=abs_cow.to_vec().iter().max().unwrap();
+            max_R[[j]]=*abs_cow.to_vec().iter().max().unwrap();
         }
         //用来产生可能的hamR
 
         match self.dim_r{
             1=>{
-
+                for i in 1..max_R[[0]]{
+                    use_hamR.push_row(array![i].view());
+                }
             }
             2=>{
+                for j in 1..max_R[[1]]{
+                    for i in -max_R[[0]]..max_R[[0]]{
+                        use_hamR.push_row(array![i,j].view());
+                    }
+                }
+                for i in 1..max_R[[0]]{
+                    use_hamR.push_row(array![i,0].view());
+                }
             }
             3=>{
-                for i in -max_R[[0]]..max_R[[0]]{
-                    for j in -max_R[[1]]..max_R[[1]]{
-                        for k in 1..max_R[[2]]{
-                            if k==0{
-                                use_hamR.push
-                            }
+                for k in 1..max_R[[2]]{
+                    for i in -max_R[[0]]..max_R[[0]]{
+                        for j in -max_R[[1]]..max_R[[1]]{
+                            use_hamR.push_row(array![i,j,k].view());
                         }
                     }
                 }
-            }
-        }
-
-        if self.spin{
-        }else{
-            for i in 0..norb{
-                for j in 0..norb{
-                    for R in 0..use_n_R{
-                        int_i:usize=i; //超胞中的 <i|
-                        use_i:usize=orb_list[i]; //对应到原胞中的 <i|
-                        int_j:usize=i; //超胞中的 <i|
-                        use_j:usize=orb_list[j]; //超胞中的 |j>
+                for j in 1..max_R[[1]]{
+                    for i in -max_R[[0]]..max_R[[0]]{
+                        use_hamR.push_row(array![i,j,0].view());
                     }
+                }
+                for i in 1..max_R[[0]]{
+                    use_hamR.push_row(array![i,0,0].view());
+                }
+            }
+             _ => todo!()
+        }
+        let use_n_R=use_hamR.len_of(Axis(0));
+        if self.spin{
+            for R in 0..use_n_R{
+                let mut add_R:bool=false;
+                let mut useham=Array2::<Complex<f64>>::zeros((nsta,nsta));
+                let mut use_rmatrix=Array3::<Complex<f64>>::zeros((self.dim_r,nsta,nsta));
+                let mut use_R=use_hamR.row(R); //超胞的R
+                for i in 0..norb{
+                    for j in 0..norb{
+                        let int_i:usize=i; //超胞中的 <i|
+                        let use_i:usize=orb_list[i]; //对应到原胞中的 <i|
+                        let int_j:usize=i; //超胞中的 <i|
+                        let use_j:usize=orb_list[j]; //超胞中的 |j>
+                        //接下来计算超胞中的R在原胞中对应的hamR
+                        let R0:Array1::<f64>=use_orb.row(j).to_owned()-use_orb.row(i).to_owned()+use_R.map(|x| *x as f64); //超胞的 R 在原始原胞的 R
+                        let R0:Array1::<isize>=R0.dot(U).map(|x| x.floor() as isize); 
+                        let R0_inv=-R0.clone();
+                        let R0_exit=find_R(&self.hamR,&R0);
+                        let R0_inv_exit=find_R(&self.hamR,&R0_inv);
+                        if R0_exit{
+                            let index=index_R(&self.hamR,&R0);
+                            add_R=true;
+                            useham[[int_i,int_j]]=self.ham[[index,use_i,use_j]];
+                            useham[[int_i+norb,int_j]]=self.ham[[index,use_i+self.norb,use_j]];
+                            useham[[int_i,int_j+norb]]=self.ham[[index,use_i,use_j+self.norb]];
+                            useham[[int_i+norb,int_j+norb]]=self.ham[[index,use_i+self.norb,use_j+self.norb]];
+                            for r in 0..self.dim_r{
+                                use_rmatrix[[r,int_i,int_j]]=self.rmatrix[[index,r,use_i,use_j]];
+                                use_rmatrix[[r,int_i+norb,int_j]]=self.rmatrix[[index,r,use_i+self.norb,use_j]];
+                                use_rmatrix[[r,int_i,int_j+norb]]=self.rmatrix[[index,r,use_i,use_j+self.norb]];
+                                use_rmatrix[[r,int_i+norb,int_j+norb]]=self.rmatrix[[index,r,use_i+self.norb,use_j+self.norb]];
+                            }
+                        }else if R0_inv_exit{
+                            let index=index_R(&self.hamR,&R0_inv);
+                            add_R=true;
+                            useham[[int_i,int_j]]=self.ham[[index,use_j,use_i]].conj();
+                            useham[[int_i+norb,int_j]]=self.ham[[index,use_j,use_i+self.norb]].conj();
+                            useham[[int_i,int_j+norb]]=self.ham[[index,use_j+self.norb,use_i]].conj();
+                            useham[[int_i+norb,int_j+norb]]=self.ham[[index,use_j+self.norb,use_i+self.norb]].conj();
+                            for r in 0..self.dim_r{
+                                use_rmatrix[[r,int_i,int_j]]=self.rmatrix[[index,r,use_j,use_i]].conj();
+                                use_rmatrix[[r,int_i+norb,int_j]]=self.rmatrix[[index,r,use_j,use_i+self.norb]].conj();
+                                use_rmatrix[[r,int_i,int_j+norb]]=self.rmatrix[[index,r,use_j+self.norb,use_i]].conj();
+                                use_rmatrix[[r,int_i+norb,int_j+norb]]=self.rmatrix[[index,r,use_j+self.norb,use_i+self.norb]].conj();
+                            }
+                        }else{
+                            continue
+                        }
+                    }
+                }
+                if add_R && R != 0{
+                    new_ham.push(Axis(0),useham.view());
+                    new_rmatrix.push(Axis(0),use_rmatrix.view());
+                    new_hamR.push_row(use_R.view());
+                }else if R==0{
+                    new_ham.slice_mut(s![0,..,..]).assign(&useham);
+                    new_rmatrix.slice_mut(s![0,..,..,..]).assign(&use_rmatrix);
+                }
+            }
+        }else{
+            for R in 0..use_n_R{
+                let mut add_R:bool=false;
+                let mut useham=Array2::<Complex<f64>>::zeros((nsta,nsta));
+                let mut use_rmatrix=Array3::<Complex<f64>>::zeros((self.dim_r,nsta,nsta));
+                let mut use_R=use_hamR.row(R); //超胞的R
+                for i in 0..norb{
+                    for j in 0..norb{
+                        let int_i:usize=i; //超胞中的 <i|
+                        let use_i:usize=orb_list[i]; //对应到原胞中的 <i|
+                        let int_j:usize=i; //超胞中的 <i|
+                        let use_j:usize=orb_list[j]; //超胞中的 |j>
+                        //接下来计算超胞中的R在原胞中对应的hamR
+                        let R0:Array1::<f64>=use_orb.row(j).to_owned()-use_orb.row(i).to_owned()+use_R.map(|x| *x as f64); //超胞的 R 在原始原胞的 R
+                        let R0:Array1::<isize>=R0.dot(U).map(|x| x.floor() as isize); 
+                        let R0_inv=-R0.clone();
+                        let R0_exit=find_R(&self.hamR,&R0);
+                        let R0_inv_exit=find_R(&self.hamR,&R0_inv);
+                        if R0_exit{
+                            let index=index_R(&self.hamR,&R0);
+                            add_R=true;
+                            useham[[int_i,int_j]]=self.ham[[index,use_i,use_j]];
+                            for r in 0..self.dim_r{
+                                use_rmatrix[[r,int_i,int_j]]=self.rmatrix[[index,r,use_i,use_j]]
+                            }
+                        }else if R0_inv_exit{
+                            let index=index_R(&self.hamR,&R0_inv);
+                            add_R=true;
+                            useham[[int_i,int_j]]=self.ham[[index,use_j,use_i]].conj();
+                            for r in 0..self.dim_r{
+                                use_rmatrix[[r,int_i,int_j]]=self.rmatrix[[index,r,use_j,use_i]].conj()
+                            }
+                        }else{
+                            continue
+                        }
+                    }
+                }
+                if add_R && R != 0{
+                    new_ham.push(Axis(0),useham.view());
+                    new_rmatrix.push(Axis(0),use_rmatrix.view());
+                    new_hamR.push_row(use_R);
+                }else if R==0{
+                    new_ham.slice_mut(s![0,..,..]).assign(&useham);
+                    new_rmatrix.slice_mut(s![0,..,..,..]).assign(&use_rmatrix);
                 }
             }
         }
+        let mut model=Model{
+            dim_r:self.dim_r,
+            norb:norb,
+            nsta:nsta,
+            natom:natom,
+            spin:self.spin,
+            lat:new_lat,
+            orb:new_orb,
+            atom:new_atom,
+            atom_list:use_atom_list,
+            ham:new_ham,
+            hamR:new_hamR,
+            rmatrix:new_rmatrix,
+        };
+        model
     }
     #[allow(non_snake_case)]
     pub fn dos(&self,k_mesh:&Array1::<usize>,E_min:f64,E_max:f64,E_n:usize,sigma:f64)->(Array1::<f64>,Array1::<f64>){
