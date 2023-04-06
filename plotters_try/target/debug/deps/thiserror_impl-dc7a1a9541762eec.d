@@ -1,0 +1,12 @@
+/home/liuyichen/Rust_study/plotters_try/target/debug/deps/libthiserror_impl-dc7a1a9541762eec.so: /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/lib.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/ast.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/attr.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/expand.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/fmt.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/generics.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/prop.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/valid.rs
+
+/home/liuyichen/Rust_study/plotters_try/target/debug/deps/thiserror_impl-dc7a1a9541762eec.d: /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/lib.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/ast.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/attr.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/expand.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/fmt.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/generics.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/prop.rs /home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/valid.rs
+
+/home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/lib.rs:
+/home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/ast.rs:
+/home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/attr.rs:
+/home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/expand.rs:
+/home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/fmt.rs:
+/home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/generics.rs:
+/home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/prop.rs:
+/home/liuyichen/.cargo/registry/src/rsproxy.cn-8f6827c7555bfaf8/thiserror-impl-1.0.40/src/valid.rs:
