@@ -17,4 +17,4 @@ ndarray-linalg={version="*",features=["intel-mkl"]}
 gnuplot="*"
 rayon="*"
 partial_application="*"
-Rustb={path="../../Rustb"}
+Rustb={path="../../../Rustb"}
